@@ -1,0 +1,628 @@
+:root {
+    --primary-accent: #06D6A0;
+    --secondary-accent: #118AB2;
+    --tertiary-accent: #073B4C;
+    --success-color: #06D6A0;
+    --warning-color: #FFD166;
+    --danger-color: #EF476F;
+    --info-color: #118AB2;
+    
+    --background-primary: #0A0E1A;
+    --background-secondary: #161B2E;
+    --background-tertiary: #1E2749;
+    --background-card: #232946;
+    --background-overlay: rgba(35, 41, 70, 0.95);
+    
+    --text-primary: #FFFFFF;
+    --text-secondary: #E2E8F0;
+    --text-muted: #CBD5E1;
+    --text-accent: #06D6A0;
+    
+    --border-color: #2E3E5C;
+    --border-accent: #06D6A0;
+    --shadow-color: rgba(6, 214, 160, 0.1);
+    --shadow-strong: rgba(6, 214, 160, 0.2);
+    
+    --gradient-primary: linear-gradient(135deg, #06D6A0 0%, #118AB2 100%);
+    --gradient-secondary: linear-gradient(135deg, #232946 0%, #1E2749 100%);
+    --gradient-accent: linear-gradient(135deg, rgba(6, 214, 160, 0.1) 0%, rgba(17, 138, 178, 0.1) 100%);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* 全局动画效果 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+    from { transform: translateX(-20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes glow {
+    0%, 100% { box-shadow: 0 0 5px var(--shadow-color); }
+    50% { box-shadow: 0 0 20px var(--shadow-strong), 0 0 30px var(--shadow-color); }
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: linear-gradient(135deg, #0A0E1A 0%, #161B2E 50%, #0A0E1A 100%);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.dashboard-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.8s ease-out;
+}
+
+/* 增强的头部样式 */
+.dashboard-header {
+    background: var(--gradient-secondary);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.5rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1400px;
+    margin: 0 auto;
+    animation: slideIn 0.6s ease-out;
+}
+
+.logo-section h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.logo-section p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin-top: 0.25rem;
+}
+
+/* 增强的控制面板 */
+.control-panel {
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.5rem 2rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.control-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+    align-items: end;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.control-group label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+}
+
+/* 精致的快速筛选按钮 */
+.quick-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.quick-filter-btn {
+    padding: 0.75rem 1.25rem;
+    background: var(--background-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.875rem;
+    font-weight: 500;
+    position: relative;
+    overflow: hidden;
+}
+
+.quick-filter-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: var(--gradient-primary);
+    transition: left 0.3s ease;
+    z-index: -1;
+}
+
+.quick-filter-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(6, 214, 160, 0.2);
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+}
+
+.quick-filter-btn:hover::before {
+    left: 0;
+}
+
+.quick-filter-btn.active {
+    background: var(--gradient-primary);
+    color: var(--background-primary);
+    border-color: var(--border-accent);
+    box-shadow: 0 4px 15px var(--shadow-color);
+    font-weight: 600;
+}
+
+.quick-filter-btn:active {
+    transform: translateY(0);
+}
+
+/* 主要内容区域 */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    animation: fadeIn 1s ease-out 0.2s both;
+}
+
+/* KPI 卡片区域 */
+.kpi-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+/* 内容网格 */
+.content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2.5rem;
+}
+
+/* 增强的卡片设计 */
+.card {
+    background: var(--gradient-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--gradient-accent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-accent);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--border-accent);
+}
+
+.card:hover::before {
+    opacity: 1;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-title::before {
+    content: '';
+    width: 4px;
+    height: 20px;
+    background: var(--gradient-primary);
+    border-radius: 2px;
+}
+
+/* KPI 卡片特别设计 */
+.kpi-card {
+    text-align: center;
+    position: relative;
+    padding: 2rem 1.5rem;
+    background: var(--gradient-secondary);
+}
+
+.kpi-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-primary);
+    border-radius: 16px 16px 0 0;
+}
+
+.kpi-card h3 {
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.kpi-value {
+    margin: 0 0 0.75rem 0;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+    display: block;
+}
+
+.kpi-change {
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    display: inline-block;
+}
+
+.kpi-change.positive {
+    background: rgba(6, 214, 160, 0.1);
+    color: var(--success-color);
+    border: 1px solid var(--success-color);
+}
+
+.kpi-change.negative {
+    background: rgba(239, 71, 111, 0.1);
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+}
+
+/* 加载状态 */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--border-color);
+    border-radius: 50%;
+    border-top-color: var(--primary-accent);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 增强的数据表格 */
+.data-table-container {
+    animation: fadeIn 0.8s ease-out 0.4s both;
+}
+
+.dash-table-container {
+    background: var(--background-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 16px !important;
+    overflow: hidden;
+}
+
+.dash-spreadsheet-container {
+    background: var(--background-card) !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
+    background: var(--background-card) !important;
+    color: var(--text-primary) !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+    background: var(--background-tertiary) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid var(--border-accent) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    font-size: 0.875rem !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+    background: var(--background-card) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+    background: var(--background-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* 强制所有表格内容为白色 */
+.dash-table-container * {
+    color: var(--text-primary) !important;
+}
+
+/* 表格分页和控制元素 */
+.dash-table-container .previous-next-container,
+.dash-table-container .page-number {
+    color: var(--text-primary) !important;
+}
+
+.dash-table-container .current-page {
+    color: var(--text-primary) !important;
+}
+
+/* 改进的表单控件 */
+.DateInput_input {
+    background: var(--background-tertiary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 0.75rem !important;
+    transition: all 0.3s ease !important;
+    font-size: 0.875rem !important;
+}
+
+.DateInput_input:focus {
+    border-color: var(--border-accent) !important;
+    box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1) !important;
+}
+
+.DateRangePickerInput {
+    background: var(--background-tertiary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+}
+
+/* 下拉菜单样式 */
+.Select-control {
+    background: var(--background-tertiary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    min-height: 42px !important;
+    transition: all 0.3s ease !important;
+}
+
+.Select-control:hover {
+    border-color: var(--border-accent) !important;
+}
+
+.Select-menu-outer {
+    background: var(--background-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+    margin-top: 4px !important;
+    max-height: 300px !important;
+    overflow-y: auto !important;
+    z-index: 1000 !important;
+}
+
+.Select-option {
+    background: var(--background-card) !important;
+    color: var(--text-primary) !important;
+    padding: 0.75rem 1rem !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+    line-height: 1.2 !important;
+}
+
+.Select-option:hover {
+    background: var(--background-tertiary) !important;
+    color: var(--text-accent) !important;
+}
+
+.Select-option.is-selected {
+    background: var(--primary-accent) !important;
+    color: var(--background-primary) !important;
+}
+
+/* 用户下拉菜单特殊样式 */
+#user-dropdown .Select-menu-outer {
+    min-width: 250px !important;
+    max-width: 350px !important;
+}
+
+#user-dropdown .Select-option {
+    font-size: 0.875rem !important;
+    padding: 0.5rem 0.75rem !important;
+}
+
+/* 强制所有文字为白色 */
+* {
+    color: var(--text-primary) !important;
+}
+
+/* 保持特定元素的颜色 */
+.kpi-value {
+    background: var(--gradient-primary) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+
+.card-title::before {
+    background: var(--gradient-primary) !important;
+}
+
+.quick-filter-btn.active {
+    color: var(--background-primary) !important;
+}
+
+.btn {
+    color: var(--background-primary) !important;
+}
+
+/* 确保下拉菜单文字可见 */
+.Select-control, .Select-placeholder, .Select-value {
+    color: var(--text-primary) !important;
+}
+
+.DateInput_input, .DateInput_input::placeholder {
+    color: var(--text-primary) !important;
+}
+
+/* 时间选择器文字 */
+.DateRangePickerInput_arrow, .DateInput_display_text {
+    color: var(--text-primary) !important;
+}
+
+/* 按钮增强 */
+.btn {
+    background: var(--gradient-primary);
+    color: var(--background-primary);
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(6, 214, 160, 0.3);
+    filter: brightness(1.1);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-accent);
+}
+
+.btn-outline:hover {
+    background: var(--primary-accent);
+    color: var(--background-primary);
+}
+
+/* 确保所有操作按钮文字清晰可见 */
+.card-header button,
+.card-header .btn {
+    color: var(--text-primary) !important;
+}
+
+/* 表格操作区域样式 */
+.data-table-container .card-header {
+    color: var(--text-primary) !important;
+}
+
+.data-table-container .card-header * {
+    color: var(--text-primary) !important;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .control-content {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    
+    .kpi-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .dashboard-header, .control-panel {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .quick-filters {
+        justify-content: center;
+    }
+    
+    .logo-section h1 {
+        font-size: 1.5rem;
+    }
+} 

@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "name": "recruitment-dashboard",
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
+    }
+  ],
+  "env": {
+    "PYTHONPATH": "."
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
+  },
+  "regions": ["hkg1"],
+  "outputDirectory": "dist"
+} 

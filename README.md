@@ -1,0 +1,172 @@
+# 🚀 智能招聘数据分析平台
+
+一个基于 Python Dash 构建的实时招聘数据分析仪表板，提供招聘漏斗分析、趋势监控和数据导出功能。
+
+## ✨ 功能特色
+
+- 📊 **实时数据分析** - 招聘漏斗、趋势图表、关键指标
+- 🎯 **多维度筛选** - 按日期范围、用户维度进行数据筛选
+- 📈 **可视化图表** - 交互式漏斗图、趋势线图
+- 📤 **数据导出** - 支持 Excel 和 CSV 格式导出
+- 🔄 **自动刷新** - 可配置的自动数据刷新
+- 📱 **响应式设计** - 适配桌面端、平板和移动端
+
+## 🛠️ 技术栈
+
+- **前端**: Dash + Plotly + Bootstrap CSS
+- **后端**: Python + Flask
+- **数据库**: MySQL (通过 PyMySQL)
+- **部署**: Vercel 无服务器函数
+
+## 🚀 快速部署到 Vercel
+
+### 1. 准备工作
+
+```bash
+# 克隆项目
+git clone https://github.com/your-username/recruitment-dashboard.git
+cd recruitment-dashboard
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 2. 环境配置
+
+复制环境变量模板：
+```bash
+cp env.example .env
+```
+
+编辑 `.env` 文件，填入你的数据库配置：
+```env
+# 数据库配置
+DB_HOST=your-database-host.com
+DB_PORT=3306
+DB_USER=your-username  
+DB_PASSWORD=your-password
+DB_NAME=your-database-name
+DB_CHARSET=utf8mb4
+```
+
+### 3. 部署到 Vercel
+
+#### 方式一：通过 Vercel CLI
+```bash
+# 安装 Vercel CLI
+npm i -g vercel
+
+# 登录并部署
+vercel login
+vercel
+```
+
+#### 方式二：通过 GitHub 集成
+1. 将代码推送到 GitHub
+2. 在 [Vercel Dashboard](https://vercel.com/dashboard) 中导入项目
+3. 配置环境变量
+4. 部署完成
+
+### 4. 环境变量配置
+
+在 Vercel 项目设置中添加以下环境变量：
+
+| 变量名 | 描述 | 示例值 |
+|--------|------|--------|
+| `DB_HOST` | 数据库主机地址 | `your-host.com` |
+| `DB_PORT` | 数据库端口 | `3306` |
+| `DB_USER` | 数据库用户名 | `your-username` |
+| `DB_PASSWORD` | 数据库密码 | `your-password` |
+| `DB_NAME` | 数据库名称 | `recruit-db` |
+| `DB_CHARSET` | 字符编码 | `utf8mb4` |
+
+## 📁 项目结构
+
+```
+recruitment-dashboard/
+├── api/                    # Vercel 无服务器函数
+│   └── index.py           # 应用入口文件
+├── assets/                # 静态资源
+│   ├── style.css          # 样式文件
+│   └── dashboard_enhancements.js  # JavaScript 增强
+├── recruitment_dashboard.py    # 主应用文件
+├── app.py                 # 本地开发入口
+├── config.py              # 配置管理
+├── requirements.txt       # Python 依赖
+├── vercel.json           # Vercel 配置
+├── env.example           # 环境变量模板
+├── .gitignore            # Git 忽略文件
+└── README.md             # 项目文档
+```
+
+## 🏃‍♂️ 本地开发
+
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 配置环境变量
+cp env.example .env
+# 编辑 .env 文件
+
+# 启动开发服务器
+python app.py
+```
+
+访问 `http://localhost:8050` 查看应用。
+
+## 📊 数据库要求
+
+项目需要以下数据表：
+
+- `recruit_event` - 招聘事件记录
+- `user` - 用户信息
+- `job` - 职位信息  
+- `resume` - 简历信息
+
+详细的数据库结构请参考项目中的数据分析脚本。
+
+## 🔧 配置说明
+
+### vercel.json 配置
+```json
+{
+  "version": 2,
+  "builds": [{"src": "api/index.py", "use": "@vercel/python"}],
+  "routes": [{"src": "/(.*)", "dest": "/api/index.py"}]
+}
+```
+
+### 环境变量说明
+- 所有数据库配置都通过环境变量管理
+- 支持本地开发和生产环境的不同配置
+- 敏感信息不会被提交到代码仓库
+
+## 🚨 注意事项
+
+1. **数据库连接**: 确保数据库允许外网访问
+2. **Vercel 限制**: 单个函数执行时间最长 60 秒
+3. **安全考虑**: 生产环境中请使用强密码和 SSL 连接
+4. **性能优化**: 大数据量时建议添加数据缓存
+
+## 📈 功能说明
+
+### 漏斗分析
+- 查看简历 → 简历通过筛选 → Boss上聊天 → 交换联系方式
+- 显示各阶段转化率和总体转化率
+
+### 趋势分析  
+- 按日期展示各类事件的变化趋势
+- 支持多事件类型对比
+
+### 数据导出
+- Excel 格式：包含完整格式和样式
+- CSV 格式：适合数据处理和分析
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## �� 许可证
+
+MIT License 

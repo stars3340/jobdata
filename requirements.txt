@@ -1,0 +1,17 @@
+# 智能招聘数据分析平台 - 生产环境依赖
+# Core packages
+dash==3.0.4
+dash-bootstrap-components==2.0.3
+dash-table==5.0.0
+Flask==3.0.3
+plotly==6.1.2
+pandas==2.3.0
+PyMySQL==1.1.1
+XlsxWriter==3.2.3
+python-dateutil==2.9.0.post0
+
+# Production server
+gunicorn==22.0.0
+
+# Environment management
+python-dotenv==1.0.0

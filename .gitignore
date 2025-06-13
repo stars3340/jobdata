@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+db_analysis_env/
+.venv/
+
+# Environment Variables
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+*.cache
+
+# Temporary files
+*.tmp
+*.temp
+
+# Generated HTML files
+*.html
+!templates/*.html
+
+# Analysis scripts (development only)
+check_*.py
+debug_*.py
+comprehensive_analysis.py
+funnel_analysis.py
+database_analysis.py
+verify_*.py
+corrected_*.py
+ui_enhancements.py
+
+# Docker (not needed for Vercel)
+Dockerfile
+docker-compose.yml
+
+# Vercel
+.vercel
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Backup files
+*.backup
+*.bak
+
+# Test files
+test_*.py
+*_test.py
+tests/ 
