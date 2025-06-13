@@ -633,9 +633,74 @@ HTML_TEMPLATE = '''
             margin: 0 auto 1rem;
         }
         
+        .table-loading {
+            position: relative;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(35, 41, 70, 0.9);
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .table-loading-spinner {
+            border: 4px solid rgba(6, 214, 160, 0.3);
+            border-top: 4px solid #06D6A0;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1.2s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        .table-loading-text {
+            color: #06D6A0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .table-loading-subtext {
+            color: #CBD5E1;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .data-table-wrapper {
+            position: relative;
+            transition: opacity 0.3s ease;
+        }
+        
+        .data-table-wrapper.loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(35, 41, 70, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            border-radius: 8px;
         }
         
         .refresh-section {
@@ -788,10 +853,18 @@ HTML_TEMPLATE = '''
                     </div>
                 </div>
             </div>
-            <div id="data-table">
-                <div class="loading">
-                    <div class="loading-spinner"></div>
-                    数据加载中...
+            <div class="data-table-wrapper" id="data-table-wrapper">
+                <div id="data-table">
+                    <div class="table-loading">
+                        <div class="table-loading-spinner"></div>
+                        <div class="table-loading-text">正在加载数据...</div>
+                        <div class="table-loading-subtext">请稍候，系统正在处理您的请求</div>
+                    </div>
+                </div>
+                <div id="table-loading-overlay" class="loading-overlay" style="display: none;">
+                    <div class="table-loading-spinner"></div>
+                    <div class="table-loading-text">数据处理中...</div>
+                    <div class="table-loading-subtext">正在筛选和排序数据</div>
                 </div>
             </div>
             <div id="pagination-controls" style="margin-top: 1rem; text-align: center;">
@@ -817,7 +890,7 @@ HTML_TEMPLATE = '''
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadUsers();
-            updateData();
+            updateData(false, '🚀 初始化中...', '正在加载页面数据');
             setupAutoRefresh();
         });
         
@@ -880,12 +953,24 @@ HTML_TEMPLATE = '''
             
             document.getElementById('start-date').value = startDate;
             document.getElementById('end-date').value = endDate;
-            updateData();
+            updateData(true, '📅 切换日期中...', `正在加载${getDateRangeText(type)}的数据`);
+        }
+        
+        // 获取日期范围描述文本
+        function getDateRangeText(type) {
+            switch(type) {
+                case 'today': return '今天';
+                case 'yesterday': return '昨天';
+                case '7days': return '最近7天';
+                case '30days': return '最近30天';
+                case 'month': return '本月';
+                default: return '指定时间段';
+            }
         }
         
         // 手动刷新数据
         function refreshData() {
-            updateData();
+            updateData(false, '🔄 刷新数据中...', '正在获取最新数据');
         }
         
         // 设置自动刷新
@@ -900,13 +985,35 @@ HTML_TEMPLATE = '''
                 }
                 
                 if (interval > 0) {
-                    autoRefreshTimer = setInterval(updateData, interval * 1000);
+                    autoRefreshTimer = setInterval(() => {
+                        updateData(false, '⏰ 自动刷新中...', '正在更新最新数据');
+                    }, interval * 1000);
                 }
             });
         }
         
+        // 显示加载状态
+        function showTableLoading(text = '数据处理中...', subtext = '请稍候') {
+            const overlay = document.getElementById('table-loading-overlay');
+            const wrapper = document.getElementById('data-table-wrapper');
+            
+            overlay.querySelector('.table-loading-text').textContent = text;
+            overlay.querySelector('.table-loading-subtext').textContent = subtext;
+            overlay.style.display = 'flex';
+            wrapper.classList.add('loading');
+        }
+        
+        // 隐藏加载状态
+        function hideTableLoading() {
+            const overlay = document.getElementById('table-loading-overlay');
+            const wrapper = document.getElementById('data-table-wrapper');
+            
+            overlay.style.display = 'none';
+            wrapper.classList.remove('loading');
+        }
+        
         // 更新所有数据
-        async function updateData(resetPagination = false) {
+        async function updateData(resetPagination = false, loadingText = '数据处理中...', loadingSubtext = '正在获取最新数据') {
             const startDate = document.getElementById('start-date').value;
             const endDate = document.getElementById('end-date').value;
             const userId = document.getElementById('user-select').value;
@@ -917,6 +1024,9 @@ HTML_TEMPLATE = '''
             }
             
             try {
+                // 显示加载动画
+                showTableLoading(loadingText, loadingSubtext);
+                
                 // 更新最后刷新时间
                 document.getElementById('last-update').textContent = 
                     '最后更新: ' + new Date().toLocaleString();
@@ -970,6 +1080,9 @@ HTML_TEMPLATE = '''
             } catch (error) {
                 console.error('更新数据失败:', error);
                 showError('数据加载失败，请稍后重试');
+            } finally {
+                // 确保加载动画被隐藏
+                hideTableLoading();
             }
         }
         
@@ -1012,7 +1125,11 @@ HTML_TEMPLATE = '''
             if (!tableData || tableData.length === 0) {
                 console.log('数据表为空，显示暂无数据');
                 document.getElementById('data-table').innerHTML = 
-                    '<div class="loading">暂无数据</div>';
+                    '<div class="table-loading">' +
+                        '<div style="font-size: 2rem; margin-bottom: 1rem;">📭</div>' +
+                        '<div class="table-loading-text">暂无数据</div>' +
+                        '<div class="table-loading-subtext">请尝试调整筛选条件或搜索关键词</div>' +
+                    '</div>';
                 document.getElementById('pagination-controls').innerHTML = '';
                 return;
             }
@@ -1198,34 +1315,41 @@ HTML_TEMPLATE = '''
         
         // 搜索功能
         function searchTable() {
-            tableState.searchText = document.getElementById('table-search').value;
-            updateData(true); // 重置到第一页
+            const searchText = document.getElementById('table-search').value;
+            tableState.searchText = searchText;
+            const loadingText = searchText ? '🔍 搜索数据中...' : '📊 加载数据中...';
+            const loadingSubtext = searchText ? `正在搜索包含 "${searchText}" 的记录` : '正在获取全部数据';
+            updateData(true, loadingText, loadingSubtext); // 重置到第一页
         }
         
         // 清除搜索
         function clearSearch() {
             document.getElementById('table-search').value = '';
             tableState.searchText = '';
-            updateData(true); // 重置到第一页
+            updateData(true, '🔄 重置筛选中...', '正在恢复显示全部数据'); // 重置到第一页
         }
         
         // 改变页面大小
         function changePageSize() {
-            tableState.pageSize = parseInt(document.getElementById('page-size').value);
-            updateData(true); // 重置到第一页
+            const newSize = parseInt(document.getElementById('page-size').value);
+            tableState.pageSize = newSize;
+            updateData(true, '📄 调整分页中...', `正在切换到每页${newSize}条记录`); // 重置到第一页
         }
         
         // 表格排序
         function sortTable(column) {
+            let sortDirection;
             if (tableState.sortField === column) {
                 // 切换排序方向
                 tableState.sortOrder = tableState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
+                sortDirection = tableState.sortOrder === 'ASC' ? '升序' : '降序';
             } else {
                 // 新列，默认降序
                 tableState.sortField = column;
                 tableState.sortOrder = 'DESC';
+                sortDirection = '降序';
             }
-            updateData(false); // 保持当前页
+            updateData(false, '↕️ 数据排序中...', `正在按${column}进行${sortDirection}排序`); // 保持当前页
         }
         
         // 更新分页控件
@@ -1277,17 +1401,46 @@ HTML_TEMPLATE = '''
         // 跳转到指定页
         function goToPage(page) {
             tableState.page = page;
-            updateData(false);
+            updateData(false, '📄 翻页中...', `正在跳转到第${page}页`);
         }
         
-        // 搜索框回车事件
+        // 用户筛选功能
+        function handleUserChange() {
+            const userSelect = document.getElementById('user-select');
+            const selectedUser = userSelect.options[userSelect.selectedIndex].text;
+            const loadingText = selectedUser.includes('全部') ? '📊 切换到全部用户...' : '👤 筛选用户数据中...';
+            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : `正在筛选 ${selectedUser} 的数据`;
+            
+            updateData(true, loadingText, loadingSubtext);
+        }
+        
+        // 事件监听器
         document.addEventListener('DOMContentLoaded', function() {
+            // 搜索框回车事件
             const searchInput = document.getElementById('table-search');
             if (searchInput) {
                 searchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         searchTable();
                     }
+                });
+            }
+            
+            // 用户选择变更事件
+            const userSelect = document.getElementById('user-select');
+            if (userSelect) {
+                userSelect.addEventListener('change', handleUserChange);
+            }
+            
+            // 日期筛选变更事件  
+            const startDateInput = document.getElementById('start-date');
+            const endDateInput = document.getElementById('end-date');
+            if (startDateInput && endDateInput) {
+                startDateInput.addEventListener('change', function() {
+                    updateData(true, '📅 更新日期范围...', '正在加载指定时间段的数据');
+                });
+                endDateInput.addEventListener('change', function() {
+                    updateData(true, '📅 更新日期范围...', '正在加载指定时间段的数据');
                 });
             }
         });
