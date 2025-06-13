@@ -2,6 +2,8 @@
 
 一个基于 Python Dash 构建的实时招聘数据分析仪表板，提供招聘漏斗分析、趋势监控和数据导出功能。
 
+> 🔐 **安全声明**: 本项目代码和文档中所有的数据库连接信息、密码等均为示例值，不包含任何真实的敏感信息。部署时请使用您自己的数据库配置。
+
 ## ✨ 功能特色
 
 - 📊 **实时数据分析** - 招聘漏斗、趋势图表、关键指标
@@ -24,8 +26,8 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/recruitment-dashboard.git
-cd recruitment-dashboard
+git clone https://github.com/stars3340/jobdata.git
+cd jobdata
 
 # 安装依赖
 pip install -r requirements.txt
@@ -40,11 +42,11 @@ cp env.example .env
 
 编辑 `.env` 文件，填入你的数据库配置：
 ```env
-# 数据库配置
-DB_HOST=your-database-host.com
+# 数据库配置 (示例 - 请替换为真实信息)
+DB_HOST=your-database-host.example.com
 DB_PORT=3306
-DB_USER=your-username  
-DB_PASSWORD=your-password
+DB_USER=your-db-username  
+DB_PASSWORD=your-secure-password
 DB_NAME=your-database-name
 DB_CHARSET=utf8mb4
 ```
@@ -69,16 +71,20 @@ vercel
 
 ### 4. 环境变量配置
 
+⚠️ **安全提醒**: 以下为示例值，请替换为您的真实数据库信息
+
 在 Vercel 项目设置中添加以下环境变量：
 
 | 变量名 | 描述 | 示例值 |
 |--------|------|--------|
-| `DB_HOST` | 数据库主机地址 | `your-host.com` |
+| `DB_HOST` | 数据库主机地址 | `your-database-host.example.com` |
 | `DB_PORT` | 数据库端口 | `3306` |
-| `DB_USER` | 数据库用户名 | `your-username` |
-| `DB_PASSWORD` | 数据库密码 | `your-password` |
-| `DB_NAME` | 数据库名称 | `recruit-db` |
+| `DB_USER` | 数据库用户名 | `your-db-username` |
+| `DB_PASSWORD` | 数据库密码 | `your-secure-password` |
+| `DB_NAME` | 数据库名称 | `your-database-name` |
 | `DB_CHARSET` | 字符编码 | `utf8mb4` |
+
+🔐 **重要**: 这些环境变量只应在Vercel控制台中配置，切勿提交到代码仓库！
 
 ## 📁 项目结构
 
@@ -146,7 +152,11 @@ python app.py
 
 1. **数据库连接**: 确保数据库允许外网访问
 2. **Vercel 限制**: 单个函数执行时间最长 60 秒
-3. **安全考虑**: 生产环境中请使用强密码和 SSL 连接
+3. **🔐 安全考虑**: 
+   - 生产环境中请使用强密码和 SSL 连接
+   - **切勿在代码中硬编码数据库密码**
+   - **不要在README或公开文档中暴露真实的环境变量**
+   - 使用Vercel Environment Variables安全地管理敏感信息
 4. **性能优化**: 大数据量时建议添加数据缓存
 
 ## 📈 功能说明
