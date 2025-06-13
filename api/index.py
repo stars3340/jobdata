@@ -487,9 +487,6 @@ HTML_TEMPLATE = '''
         }
         
         .table-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             margin-bottom: 1rem;
         }
         
@@ -497,10 +494,26 @@ HTML_TEMPLATE = '''
             color: #FFFFFF;
             font-size: 1.3rem;
             font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .table-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         
         .export-buttons {
             display: flex;
+            align-items: center;
             gap: 1rem;
         }
         
@@ -533,10 +546,74 @@ HTML_TEMPLATE = '''
             background: rgba(6, 214, 160, 0.1);
             font-weight: 600;
             color: #06D6A0;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: background-color 0.3s ease;
+        }
+        
+        .data-table th:hover {
+            background: rgba(6, 214, 160, 0.2);
+        }
+        
+        .data-table th.sortable::after {
+            content: ' ↕️';
+            font-size: 0.8rem;
+            opacity: 0.5;
+        }
+        
+        .data-table th.sort-asc::after {
+            content: ' ⬆️';
+            opacity: 1;
+        }
+        
+        .data-table th.sort-desc::after {
+            content: ' ⬇️';
+            opacity: 1;
         }
         
         .data-table tr:hover {
             background: rgba(6, 214, 160, 0.05);
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(6, 214, 160, 0.3);
+            background: rgba(35, 41, 70, 0.8);
+            color: #FFFFFF;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background: #06D6A0;
+            border-color: #06D6A0;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination .current-page {
+            background: #06D6A0;
+            border-color: #06D6A0;
+            font-weight: 600;
+        }
+        
+        .pagination-info {
+            color: #CBD5E1;
+            font-size: 0.9rem;
+            margin: 0 1rem;
         }
         
         .loading {
@@ -583,8 +660,32 @@ HTML_TEMPLATE = '''
                 grid-template-columns: 1fr;
             }
             
+            .table-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .search-box input {
+                width: 100% !important;
+            }
+            
             .export-buttons {
                 flex-direction: column;
+            }
+            
+            .pagination {
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+            
+            .pagination button {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
             }
         }
     </style>
@@ -668,8 +769,23 @@ HTML_TEMPLATE = '''
         <div class="data-table-section">
             <div class="table-header">
                 <h3>📋 详细数据</h3>
-                <div class="export-buttons">
-                    <button class="btn btn-outline" onclick="exportData('csv')">📄 导出CSV</button>
+                <div class="table-controls">
+                    <div class="search-box">
+                        <input type="text" id="table-search" placeholder="🔍 搜索用户、事件类型或日期..." 
+                               style="padding: 0.5rem; border: 1px solid rgba(6, 214, 160, 0.3); border-radius: 6px; background: rgba(35, 41, 70, 0.8); color: #FFFFFF; width: 250px;">
+                        <button class="btn" onclick="searchTable()" style="margin-left: 0.5rem; padding: 0.5rem 1rem;">搜索</button>
+                        <button class="btn btn-outline" onclick="clearSearch()" style="margin-left: 0.5rem; padding: 0.5rem 1rem;">清除</button>
+                    </div>
+                    <div class="export-buttons">
+                        <select id="page-size" onchange="changePageSize()" 
+                                style="padding: 0.5rem; border: 1px solid rgba(6, 214, 160, 0.3); border-radius: 6px; background: rgba(35, 41, 70, 0.8); color: #FFFFFF; margin-right: 1rem;">
+                            <option value="10">10条/页</option>
+                            <option value="20" selected>20条/页</option>
+                            <option value="50">50条/页</option>
+                            <option value="100">100条/页</option>
+                        </select>
+                        <button class="btn btn-outline" onclick="exportData('csv')">📄 导出CSV</button>
+                    </div>
                 </div>
             </div>
             <div id="data-table">
@@ -678,6 +794,9 @@ HTML_TEMPLATE = '''
                     数据加载中...
                 </div>
             </div>
+            <div id="pagination-controls" style="margin-top: 1rem; text-align: center;">
+                <!-- 分页控件将在这里动态生成 -->
+            </div>
         </div>
     </div>
     
@@ -685,6 +804,15 @@ HTML_TEMPLATE = '''
         let autoRefreshTimer = null;
         let funnelChart = null;
         let trendChart = null;
+        
+        // 表格状态
+        let tableState = {
+            page: 1,
+            pageSize: 20,
+            sortField: 'create_time',
+            sortOrder: 'DESC',
+            searchText: ''
+        };
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
@@ -778,18 +906,35 @@ HTML_TEMPLATE = '''
         }
         
         // 更新所有数据
-        async function updateData() {
+        async function updateData(resetPagination = false) {
             const startDate = document.getElementById('start-date').value;
             const endDate = document.getElementById('end-date').value;
             const userId = document.getElementById('user-select').value;
+            
+            // 重置分页（搜索或筛选时）
+            if (resetPagination) {
+                tableState.page = 1;
+            }
             
             try {
                 // 更新最后刷新时间
                 document.getElementById('last-update').textContent = 
                     '最后更新: ' + new Date().toLocaleString();
                 
+                // 构建API URL
+                const params = new URLSearchParams({
+                    start_date: startDate,
+                    end_date: endDate,
+                    user_id: userId,
+                    page: tableState.page,
+                    page_size: tableState.pageSize,
+                    sort_field: tableState.sortField,
+                    sort_order: tableState.sortOrder,
+                    search: tableState.searchText
+                });
+                
                 // 获取数据
-                const response = await fetch('/api/data?start_date=' + startDate + '&end_date=' + endDate + '&user_id=' + userId);
+                const response = await fetch('/api/data?' + params.toString());
                 const data = await response.json();
                 
                 // 调试输出
@@ -818,8 +963,9 @@ HTML_TEMPLATE = '''
                 
                 // 更新数据表
                 console.log('表格数据:', data.table_data);
+                console.log('分页信息:', data.pagination);
                 console.log('调试信息:', data.debug);
-                updateDataTable(data.table_data);
+                updateDataTable(data.table_data, data.pagination);
                 
             } catch (error) {
                 console.error('更新数据失败:', error);
@@ -858,45 +1004,66 @@ HTML_TEMPLATE = '''
         }
         
         // 更新数据表
-        function updateDataTable(tableData) {
+        function updateDataTable(tableData, pagination) {
             console.log('updateDataTable被调用，数据:', tableData);
             console.log('数据类型:', typeof tableData, '数据长度:', tableData ? tableData.length : 'null');
+            console.log('分页信息:', pagination);
             
             if (!tableData || tableData.length === 0) {
                 console.log('数据表为空，显示暂无数据');
                 document.getElementById('data-table').innerHTML = 
                     '<div class="loading">暂无数据</div>';
+                document.getElementById('pagination-controls').innerHTML = '';
                 return;
             }
             
+            // 定义显示的列（过滤掉内部字段）
+            const displayColumns = ['日期', '用户名', '事件类型', '次数'];
+            const sortableColumns = {
+                '日期': '日期',
+                '用户名': '用户名', 
+                '事件类型': '事件类型',
+                '次数': '次数'
+            };
+            
             // 生成表格HTML
-            const headers = Object.keys(tableData[0]);
             let tableHtml = '<table class="data-table"><thead><tr>';
             
-            headers.forEach(header => {
-                tableHtml += '<th>' + header + '</th>';
+            displayColumns.forEach(header => {
+                const isSortable = sortableColumns[header];
+                const isCurrentSort = tableState.sortField === header;
+                let headerClass = 'sortable';
+                
+                if (isCurrentSort) {
+                    headerClass += tableState.sortOrder === 'ASC' ? ' sort-asc' : ' sort-desc';
+                }
+                
+                tableHtml += '<th class="' + headerClass + '" onclick="sortTable(\'' + header + '\')">' + header + '</th>';
             });
             tableHtml += '</tr></thead><tbody>';
             
-            // 只显示前100条数据以提高性能
-            const displayData = tableData.slice(0, 100);
-            displayData.forEach(row => {
+            // 显示数据行
+            tableData.forEach(row => {
                 tableHtml += '<tr>';
-                headers.forEach(header => {
-                    tableHtml += '<td>' + (row[header] || '') + '</td>';
+                displayColumns.forEach(header => {
+                    let value = row[header] || '';
+                    // 格式化数值
+                    if (header === '次数' && value) {
+                        value = parseInt(value).toLocaleString();
+                    }
+                    tableHtml += '<td>' + value + '</td>';
                 });
                 tableHtml += '</tr>';
             });
             
             tableHtml += '</tbody></table>';
             
-            if (tableData.length > 100) {
-                tableHtml += '<p style="text-align: center; margin-top: 1rem; color: #CBD5E1;">' +
-                    '显示前100条数据，共' + tableData.length + '条记录' +
-                '</p>';
-            }
-            
             document.getElementById('data-table').innerHTML = tableHtml;
+            
+            // 更新分页控件
+            if (pagination) {
+                updatePagination(pagination);
+            }
         }
         
         // 导出数据
@@ -1028,6 +1195,102 @@ HTML_TEMPLATE = '''
                 }
             });
         }
+        
+        // 搜索功能
+        function searchTable() {
+            tableState.searchText = document.getElementById('table-search').value;
+            updateData(true); // 重置到第一页
+        }
+        
+        // 清除搜索
+        function clearSearch() {
+            document.getElementById('table-search').value = '';
+            tableState.searchText = '';
+            updateData(true); // 重置到第一页
+        }
+        
+        // 改变页面大小
+        function changePageSize() {
+            tableState.pageSize = parseInt(document.getElementById('page-size').value);
+            updateData(true); // 重置到第一页
+        }
+        
+        // 表格排序
+        function sortTable(column) {
+            if (tableState.sortField === column) {
+                // 切换排序方向
+                tableState.sortOrder = tableState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
+            } else {
+                // 新列，默认降序
+                tableState.sortField = column;
+                tableState.sortOrder = 'DESC';
+            }
+            updateData(false); // 保持当前页
+        }
+        
+        // 更新分页控件
+        function updatePagination(pagination) {
+            const { total, page, pageSize, totalPages } = pagination;
+            let paginationHtml = '<div class="pagination">';
+            
+            // 上一页按钮
+            const prevDisabled = page <= 1 ? 'disabled' : '';
+            paginationHtml += '<button onclick="goToPage(' + (page - 1) + ')" ' + prevDisabled + '>⬅️ 上一页</button>';
+            
+            // 页码按钮
+            const startPage = Math.max(1, page - 2);
+            const endPage = Math.min(totalPages, page + 2);
+            
+            if (startPage > 1) {
+                paginationHtml += '<button onclick="goToPage(1)">1</button>';
+                if (startPage > 2) {
+                    paginationHtml += '<span style="color: #CBD5E1; padding: 0 0.5rem;">...</span>';
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const currentClass = i === page ? 'current-page' : '';
+                paginationHtml += '<button class="' + currentClass + '" onclick="goToPage(' + i + ')">' + i + '</button>';
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHtml += '<span style="color: #CBD5E1; padding: 0 0.5rem;">...</span>';
+                }
+                paginationHtml += '<button onclick="goToPage(' + totalPages + ')">' + totalPages + '</button>';
+            }
+            
+            // 下一页按钮
+            const nextDisabled = page >= totalPages ? 'disabled' : '';
+            paginationHtml += '<button onclick="goToPage(' + (page + 1) + ')" ' + nextDisabled + '>下一页 ➡️</button>';
+            
+            paginationHtml += '</div>';
+            
+            // 分页信息
+            const start = (page - 1) * pageSize + 1;
+            const end = Math.min(page * pageSize, total);
+            paginationHtml += '<div class="pagination-info">显示第 ' + start + '-' + end + ' 条，共 ' + total + ' 条记录</div>';
+            
+            document.getElementById('pagination-controls').innerHTML = paginationHtml;
+        }
+        
+        // 跳转到指定页
+        function goToPage(page) {
+            tableState.page = page;
+            updateData(false);
+        }
+        
+        // 搜索框回车事件
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('table-search');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        searchTable();
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
@@ -1106,21 +1369,34 @@ def api_data():
         trend_data = get_trend_data(start_date, end_date, user_id) or []
         trend_chart = create_trend_chart(trend_data)
         
+        # 获取分页参数
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 20))
+        sort_field = request.args.get('sort_field', 'create_time')
+        sort_order = request.args.get('sort_order', 'DESC')
+        search_text = request.args.get('search', '')
+        
         # 获取详细数据表
-        table_data = get_table_data(start_date, end_date, user_id) or []
+        table_result = get_table_data(start_date, end_date, user_id, page, page_size, sort_field, sort_order, search_text)
         
         return jsonify({
             'metrics': metrics,
             'funnel_chart': funnel_chart,
             'trend_chart': trend_chart,
-            'table_data': table_data,
+            'table_data': table_result['data'] if table_result else [],
+            'pagination': {
+                'total': table_result['total'] if table_result else 0,
+                'page': table_result['page'] if table_result else 1,
+                'page_size': table_result['page_size'] if table_result else 20,
+                'total_pages': table_result['total_pages'] if table_result else 0
+            },
             'debug': {
                 'start_date': start_date,
                 'end_date': end_date,
                 'user_id': user_id,
                 'funnel_count': len(funnel_data),
                 'trend_count': len(trend_data),
-                'table_count': len(table_data)
+                'table_count': len(table_result['data']) if table_result else 0
             }
         })
     except Exception as e:
@@ -1149,8 +1425,8 @@ def api_export():
         print(f"导出数据失败: {e}")
         return jsonify({'error': str(e)}), 500
 
-def get_table_data(start_date=None, end_date=None, user_id=None):
-    """获取数据表数据"""
+def get_table_data(start_date=None, end_date=None, user_id=None, page=1, page_size=20, sort_field='create_time', sort_order='DESC', search_text=''):
+    """获取数据表数据（支持分页、排序、搜索）"""
     where_conditions = []
     
     if start_date and end_date:
@@ -1159,15 +1435,51 @@ def get_table_data(start_date=None, end_date=None, user_id=None):
     if user_id and user_id != 'all':
         where_conditions.append(f"uid = '{user_id}'")
     
+    # 搜索功能
+    if search_text:
+        search_conditions = [
+            f"uid LIKE '%{search_text}%'",
+            f"event_type LIKE '%{search_text}%'",
+            f"DATE(create_time) LIKE '%{search_text}%'"
+        ]
+        where_conditions.append(f"({' OR '.join(search_conditions)})")
+    
     where_clause = " AND ".join(where_conditions)
     if where_clause:
         where_clause = f"WHERE {where_clause}"
     
-    # 简化查询，直接从recruit_event表获取数据
+    # 排序映射
+    sort_mapping = {
+        '日期': 'DATE(create_time)',
+        '用户名': 'uid', 
+        '事件类型': 'event_type',
+        '次数': 'event_count',
+        'create_time': 'create_time'
+    }
+    
+    sort_column = sort_mapping.get(sort_field, 'create_time')
+    sort_direction = 'ASC' if sort_order.upper() == 'ASC' else 'DESC'
+    
+    # 计算偏移量
+    offset = (page - 1) * page_size
+    
+    # 获取总数
+    count_sql = f"""
+    SELECT COUNT(DISTINCT DATE(create_time), uid, event_type) as total
+    FROM recruit_event
+    {where_clause}
+    """
+    count_result = query_data(count_sql)
+    total_count = count_result[0]['total'] if count_result else 0
+    
+    # 获取分页数据
     sql = f"""
     SELECT 
+        id,
         DATE(create_time) as 日期,
+        create_time,
         CONCAT('用户-', LEFT(uid, 8)) as 用户名,
+        uid,
         CASE 
             WHEN event_type = 1 THEN '查看简历'
             WHEN event_type = 2 THEN '简历通过筛选'
@@ -1175,15 +1487,24 @@ def get_table_data(start_date=None, end_date=None, user_id=None):
             WHEN event_type = 13 THEN '交换联系方式'
             ELSE CONCAT('事件类型-', event_type)
         END as 事件类型,
+        event_type,
         COUNT(*) as 次数
     FROM recruit_event
     {where_clause}
     GROUP BY DATE(create_time), uid, event_type
-    ORDER BY DATE(create_time) DESC, uid, event_type
-    LIMIT 100
+    ORDER BY {sort_column} {sort_direction}
+    LIMIT {page_size} OFFSET {offset}
     """
     
-    return query_data(sql)
+    data = query_data(sql)
+    
+    return {
+        'data': data,
+        'total': total_count,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total_count + page_size - 1) // page_size
+    }
 
 def get_export_data(start_date=None, end_date=None, user_id=None):
     """获取导出数据"""
