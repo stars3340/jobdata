@@ -1,17 +1,17 @@
-# 智能招聘数据分析平台 - 生产环境依赖
-# Core packages
-dash==3.0.4
-dash-bootstrap-components==2.0.3
-dash-table==5.0.0
+# 智能招聘数据分析平台 - 超轻量级版本 (Vercel 250MB限制)
+# 核心Web框架 - 必需
 Flask==3.0.3
-plotly==6.1.2
-pandas==2.3.0
+
+# 最精简的数据处理
 PyMySQL==1.1.1
-XlsxWriter==3.2.3
 python-dateutil==2.9.0.post0
 
-# Production server
-gunicorn==22.0.0
+# 最轻量级的图表库
+plotly==5.17.0
 
-# Environment management
-python-dotenv==1.0.0
+# 移除的包说明:
+# - pandas: 太大，改用内置数据处理
+# - dash: 太大，改用纯Flask + plotly.js
+# - XlsxWriter: 太大，CSV导出就够了
+# - dash-bootstrap-components: 不需要了
+# - gunicorn: Vercel不需要
