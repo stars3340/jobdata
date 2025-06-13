@@ -817,6 +817,8 @@ HTML_TEMPLATE = '''
                 }
                 
                 // 更新数据表
+                console.log('表格数据:', data.table_data);
+                console.log('调试信息:', data.debug);
                 updateDataTable(data.table_data);
                 
             } catch (error) {
@@ -857,7 +859,11 @@ HTML_TEMPLATE = '''
         
         // 更新数据表
         function updateDataTable(tableData) {
+            console.log('updateDataTable被调用，数据:', tableData);
+            console.log('数据类型:', typeof tableData, '数据长度:', tableData ? tableData.length : 'null');
+            
             if (!tableData || tableData.length === 0) {
+                console.log('数据表为空，显示暂无数据');
                 document.getElementById('data-table').innerHTML = 
                     '<div class="loading">暂无数据</div>';
                 return;
@@ -1148,36 +1154,33 @@ def get_table_data(start_date=None, end_date=None, user_id=None):
     where_conditions = []
     
     if start_date and end_date:
-        where_conditions.append(f"re.create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
     
     if user_id and user_id != 'all':
-        where_conditions.append(f"re.uid = '{user_id}'")
+        where_conditions.append(f"uid = '{user_id}'")
     
     where_clause = " AND ".join(where_conditions)
     if where_clause:
         where_clause = f"WHERE {where_clause}"
     
+    # 简化查询，直接从recruit_event表获取数据
     sql = f"""
     SELECT 
-        DATE(re.create_time) as 日期,
+        DATE(create_time) as 日期,
+        CONCAT('用户-', LEFT(uid, 8)) as 用户名,
         CASE 
-            WHEN u.name IS NOT NULL AND u.name != '' THEN u.name
-            ELSE CONCAT('用户-', LEFT(u.id, 8))
-        END as 用户名,
-        CASE 
-            WHEN re.event_type = 1 THEN '查看简历'
-            WHEN re.event_type = 2 THEN '简历通过筛选'
-            WHEN re.event_type = 12 THEN 'Boss上聊天'
-            WHEN re.event_type = 13 THEN '交换联系方式'
-            ELSE CONCAT('事件类型-', re.event_type)
+            WHEN event_type = 1 THEN '查看简历'
+            WHEN event_type = 2 THEN '简历通过筛选'
+            WHEN event_type = 12 THEN 'Boss上聊天'
+            WHEN event_type = 13 THEN '交换联系方式'
+            ELSE CONCAT('事件类型-', event_type)
         END as 事件类型,
         COUNT(*) as 次数
-    FROM recruit_event re
-    LEFT JOIN user u ON re.uid = u.id
+    FROM recruit_event
     {where_clause}
-    GROUP BY DATE(re.create_time), re.uid, re.event_type, u.name
-    ORDER BY re.create_time DESC
-    LIMIT 500
+    GROUP BY DATE(create_time), uid, event_type
+    ORDER BY DATE(create_time) DESC, uid, event_type
+    LIMIT 100
     """
     
     return query_data(sql)
