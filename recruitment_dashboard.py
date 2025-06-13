@@ -776,7 +776,7 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                 
                 # 创建Excel文件
                 output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     df.to_excel(writer, sheet_name='招聘数据', index=False)
                 
                 output.seek(0)
