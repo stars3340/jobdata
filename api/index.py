@@ -792,8 +792,20 @@ HTML_TEMPLATE = '''
                 const response = await fetch('/api/data?start_date=' + startDate + '&end_date=' + endDate + '&user_id=' + userId);
                 const data = await response.json();
                 
+                // 调试输出
+                console.log('API返回数据:', data);
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    throw new Error('API请求失败: ' + response.status);
+                }
+                
                 // 更新KPI指标
-                updateMetrics(data.metrics);
+                if (data.metrics) {
+                    updateMetrics(data.metrics);
+                } else {
+                    console.error('缺少metrics数据');
+                }
                 
                 // 更新图表
                 if (data.funnel_chart && data.funnel_chart.labels) {
@@ -1027,6 +1039,34 @@ def index():
                                 start_date=week_ago.strftime('%Y-%m-%d'),
                                 end_date=today.strftime('%Y-%m-%d'))
 
+# API路由：健康检查
+@app.route('/api/health')
+def api_health():
+    """健康检查API"""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT 1")
+            result = cursor.fetchone()
+            connection.close()
+            return jsonify({
+                'status': 'healthy',
+                'database': 'connected',
+                'test_query': 'success'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'database': 'connection_failed'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'database': 'exception',
+            'error': str(e)
+        }), 500
+
 # API路由：获取用户列表
 @app.route('/api/users')
 def api_users():
@@ -1048,7 +1088,7 @@ def api_data():
         user_id = request.args.get('user_id', 'all')
         
         # 获取漏斗数据
-        funnel_data = get_funnel_data(start_date, end_date, user_id)
+        funnel_data = get_funnel_data(start_date, end_date, user_id) or []
         
         # 计算指标
         metrics = calculate_metrics(funnel_data)
@@ -1057,17 +1097,25 @@ def api_data():
         funnel_chart = create_funnel_chart(funnel_data)
         
         # 获取趋势数据
-        trend_data = get_trend_data(start_date, end_date, user_id)
+        trend_data = get_trend_data(start_date, end_date, user_id) or []
         trend_chart = create_trend_chart(trend_data)
         
         # 获取详细数据表
-        table_data = get_table_data(start_date, end_date, user_id)
+        table_data = get_table_data(start_date, end_date, user_id) or []
         
         return jsonify({
             'metrics': metrics,
             'funnel_chart': funnel_chart,
             'trend_chart': trend_chart,
-            'table_data': table_data
+            'table_data': table_data,
+            'debug': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'user_id': user_id,
+                'funnel_count': len(funnel_data),
+                'trend_count': len(trend_data),
+                'table_count': len(table_data)
+            }
         })
     except Exception as e:
         print(f"获取数据失败: {e}")
