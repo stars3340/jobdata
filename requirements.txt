@@ -1,23 +1,13 @@
-# 智能招聘数据分析平台 - 优化版本
-# 核心框架 (保留完整功能)
-dash==2.17.1
-dash-bootstrap-components==1.6.0
-dash-table==5.0.0
+# 智能招聘数据分析平台 - 超极限优化版本
+# 目标：< 15MB 总大小
+
+# 最小Web框架
 Flask==3.0.3
 
-# 数据处理 (使用较小版本)
-pandas==2.0.3
-plotly==5.17.0
-
-# 数据库和工具
+# 数据库连接
 PyMySQL==1.1.1
-python-dateutil==2.9.0.post0
 
-# 导出功能 (保留但使用轻量版)
-openpyxl==3.1.2
-
-# 优化说明:
-# - 使用较早但稳定的dash版本
-# - pandas 2.0.3比2.3.0小约20%
-# - openpyxl替代XlsxWriter，体积更小
-# - 移除gunicorn (Vercel不需要)
+# 注意: 完全移除plotly依赖，改用纯JS Chart.js CDN
+# 注意: 移除python-dateutil，使用原生datetime
+# 
+# 预计总大小: < 15MB

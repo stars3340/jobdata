@@ -10,8 +10,6 @@ import json
 from datetime import datetime, timedelta, date
 from flask import Flask, render_template_string, jsonify, request, Response
 import pymysql
-import plotly.graph_objects as go
-import plotly.utils
 
 # 创建Flask应用
 app = Flask(__name__)
@@ -198,65 +196,41 @@ def calculate_metrics(funnel_data):
     return metrics
 
 def create_funnel_chart(funnel_data):
-    """创建漏斗图"""
+    """创建漏斗图数据（Chart.js格式）"""
     if not funnel_data:
         return {}
     
     stages = [item['stage'] for item in funnel_data]
     counts = [item['count'] for item in funnel_data]
     
-    # 计算百分比文本
-    stage_texts = []
+    # 计算转化率
+    conversion_rates = []
     total_count = counts[0] if counts else 0
     
     for i, count in enumerate(counts):
         if i == 0:
-            stage_texts.append(f"{count}")
+            conversion_rates.append(100)
         else:
-            if total_count > 0:
-                total_percent = count / total_count * 100
-                prev_percent = count / counts[i-1] * 100 if counts[i-1] > 0 else 0
-                stage_texts.append(f"{count}<br>总体: {total_percent:.1f}%<br>转化: {prev_percent:.1f}%")
+            if counts[i-1] > 0:
+                conversion_rates.append(round((count / counts[i-1]) * 100, 1))
             else:
-                stage_texts.append(f"{count}")
+                conversion_rates.append(0)
     
-    fig = go.Figure(go.Funnel(
-        y=stages,
-        x=counts,
-        textinfo="text",
-        text=stage_texts,
-        textfont=dict(size=14, color='white'),
-        marker=dict(
-            color=['#06D6A0', '#118AB2', '#FFD166', '#EF476F'],
-            line=dict(width=2, color='white')
-        ),
-        connector=dict(line=dict(color='#06D6A0', dash='dot', width=3))
-    ))
-    
-    fig.update_layout(
-        title=dict(
-            text="<b>招聘漏斗分析</b>",
-            font=dict(size=20, color='white'),
-            x=0.5
-        ),
-        font=dict(color='white'),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(t=80, b=40, l=40, r=40)
-    )
-    
-    return json.loads(plotly.utils.PlotlyJSONEncoder().encode(fig))
+    return {
+        'labels': stages,
+        'data': counts,
+        'conversion_rates': conversion_rates,
+        'colors': ['#06D6A0', '#118AB2', '#FFD166', '#EF476F']
+    }
 
 def create_trend_chart(trend_data):
-    """创建趋势图"""
+    """创建趋势图数据（Chart.js格式）"""
     if not trend_data:
         return {}
     
-    # 使用原生Python进行数据透视（替代pandas pivot_table）
+    # 使用原生Python进行数据透视
     dates = sorted(list(set([row['date'].strftime('%Y-%m-%d') for row in trend_data])))
     event_types = ['查看简历', '简历通过筛选', 'Boss上聊天', '交换联系方式']
-    
-    fig = go.Figure()
     
     color_map = {
         '查看简历': '#06D6A0',
@@ -264,6 +238,8 @@ def create_trend_chart(trend_data):
         'Boss上聊天': '#FFD166', 
         '交换联系方式': '#EF476F'
     }
+    
+    datasets = []
     
     for event_type in event_types:
         event_data = []
@@ -277,46 +253,18 @@ def create_trend_chart(trend_data):
             event_data.append(count)
         
         if event_type in color_map:
-            fig.add_trace(go.Scatter(
-                x=dates,
-                y=event_data,
-                mode='lines+markers',
-                name=event_type,
-                line=dict(color=color_map[event_type], width=3),
-                marker=dict(size=8, line=dict(width=2, color='white')),
-                hovertemplate=f'<b>{event_type}</b><br>日期: %{{x}}<br>数量: %{{y}}<extra></extra>'
-            ))
+            datasets.append({
+                'label': event_type,
+                'data': event_data,
+                'borderColor': color_map[event_type],
+                'backgroundColor': color_map[event_type] + '20',
+                'tension': 0.4
+            })
     
-    fig.update_layout(
-        title=dict(
-            text="<b>每日活动趋势</b>",
-            font=dict(size=20, color='white'),
-            x=0.5
-        ),
-        xaxis=dict(
-            title=dict(text="日期", font=dict(color='white')),
-            tickfont=dict(color='white'),
-            gridcolor='rgba(255,255,255,0.1)'
-        ),
-        yaxis=dict(
-            title=dict(text="活动数量", font=dict(color='white')),
-            tickfont=dict(color='white'),
-            gridcolor='rgba(255,255,255,0.1)'
-        ),
-        legend=dict(
-            font=dict(color='white'),
-            bgcolor='rgba(35, 41, 70, 0.8)',
-            bordercolor='#06D6A0',
-            borderwidth=1
-        ),
-        font=dict(color='white'),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(t=80, b=60, l=60, r=40),
-        hovermode='x unified'
-    )
-    
-    return json.loads(plotly.utils.PlotlyJSONEncoder().encode(fig))
+    return {
+        'labels': dates,
+        'datasets': datasets
+    }
 
 # 完整的HTML模板（保持原有界面设计）
 HTML_TEMPLATE = '''
@@ -326,7 +274,7 @@ HTML_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🚀 智能招聘数据分析平台</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -703,21 +651,15 @@ HTML_TEMPLATE = '''
         <div class="charts-grid">
             <div class="chart-container">
                 <h3 class="chart-title">📊 招聘漏斗分析</h3>
-                <div id="funnel-chart" style="height: 500px;">
-                    <div class="loading">
-                        <div class="loading-spinner"></div>
-                        图表加载中...
-                    </div>
+                <div style="height: 450px; position: relative;">
+                    <canvas id="funnel-chart"></canvas>
                 </div>
             </div>
             
             <div class="chart-container">
                 <h3 class="chart-title">📈 每日活动趋势</h3>
-                <div id="trend-chart" style="height: 500px;">
-                    <div class="loading">
-                        <div class="loading-spinner"></div>
-                        图表加载中...
-                    </div>
+                <div style="height: 450px; position: relative;">
+                    <canvas id="trend-chart"></canvas>
                 </div>
             </div>
         </div>
@@ -741,6 +683,8 @@ HTML_TEMPLATE = '''
     
     <script>
         let autoRefreshTimer = null;
+        let funnelChart = null;
+        let trendChart = null;
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
@@ -852,12 +796,12 @@ HTML_TEMPLATE = '''
                 updateMetrics(data.metrics);
                 
                 // 更新图表
-                if (data.funnel_chart && data.funnel_chart.data) {
-                    Plotly.newPlot('funnel-chart', data.funnel_chart.data, data.funnel_chart.layout, {responsive: true});
+                if (data.funnel_chart && data.funnel_chart.labels) {
+                    updateFunnelChart(data.funnel_chart);
                 }
                 
-                if (data.trend_chart && data.trend_chart.data) {
-                    Plotly.newPlot('trend-chart', data.trend_chart.data, data.trend_chart.layout, {responsive: true});
+                if (data.trend_chart && data.trend_chart.labels) {
+                    updateTrendChart(data.trend_chart);
                 }
                 
                 // 更新数据表
@@ -970,6 +914,102 @@ HTML_TEMPLATE = '''
         function showError(message) {
             // 简单的错误提示，可以后续改进
             alert(message);
+        }
+        
+        // 更新漏斗图
+        function updateFunnelChart(chartData) {
+            const ctx = document.getElementById('funnel-chart').getContext('2d');
+            
+            if (funnelChart) {
+                funnelChart.destroy();
+            }
+            
+            funnelChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        data: chartData.data,
+                        backgroundColor: chartData.colors,
+                        borderColor: chartData.colors,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: '招聘漏斗分析',
+                            color: '#FFFFFF',
+                            font: { size: 18 }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.x;
+                                    const rate = chartData.conversion_rates[context.dataIndex];
+                                    return `数量: ${value} | 转化率: ${rate}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#FFFFFF' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#FFFFFF' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 更新趋势图
+        function updateTrendChart(chartData) {
+            const ctx = document.getElementById('trend-chart').getContext('2d');
+            
+            if (trendChart) {
+                trendChart.destroy();
+            }
+            
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#FFFFFF' }
+                        },
+                        title: {
+                            display: true,
+                            text: '每日活动趋势',
+                            color: '#FFFFFF',
+                            font: { size: 18 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#FFFFFF' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#FFFFFF' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
         }
     </script>
 </body>
@@ -1142,7 +1182,6 @@ def get_export_data(start_date=None, end_date=None, user_id=None):
 def export_csv(data):
     """导出CSV格式数据"""
     import io
-    from dateutil import parser
     
     if not data:
         return Response("暂无数据", mimetype="text/csv")
