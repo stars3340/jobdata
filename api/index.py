@@ -965,7 +965,7 @@ HTML_TEMPLATE = '''
             
             document.getElementById('start-date').value = startDate;
             document.getElementById('end-date').value = endDate;
-            updateData(true, '📅 切换日期中...', `正在加载${getDateRangeText(type)}的数据`);
+            updateData(true, '📅 切换日期中...', '正在加载' + getDateRangeText(type) + '的数据');
         }
         
         // 获取日期范围描述文本
@@ -1418,7 +1418,7 @@ HTML_TEMPLATE = '''
             const searchText = document.getElementById('table-search').value;
             tableState.searchText = searchText;
             const loadingText = searchText ? '🔍 搜索数据中...' : '📊 加载数据中...';
-            const loadingSubtext = searchText ? `正在搜索包含 "${searchText}" 的记录` : '正在获取全部数据';
+            const loadingSubtext = searchText ? '正在搜索包含 "' + searchText + '" 的记录' : '正在获取全部数据';
             updateData(true, loadingText, loadingSubtext); // 重置到第一页
         }
         
@@ -1433,7 +1433,7 @@ HTML_TEMPLATE = '''
         function changePageSize() {
             const newSize = parseInt(document.getElementById('page-size').value);
             tableState.pageSize = newSize;
-            updateData(true, '📄 调整分页中...', `正在切换到每页${newSize}条记录`); // 重置到第一页
+            updateData(true, '📄 调整分页中...', '正在切换到每页' + newSize + '条记录'); // 重置到第一页
         }
         
         // 表格排序
@@ -1449,7 +1449,7 @@ HTML_TEMPLATE = '''
                 tableState.sortOrder = 'DESC';
                 sortDirection = '降序';
             }
-            updateData(false, '↕️ 数据排序中...', `正在按${column}进行${sortDirection}排序`); // 保持当前页
+            updateData(false, '↕️ 数据排序中...', '正在按' + column + '进行' + sortDirection + '排序'); // 保持当前页
         }
         
         // 更新分页控件
@@ -1501,7 +1501,7 @@ HTML_TEMPLATE = '''
         // 跳转到指定页
         function goToPage(page) {
             tableState.page = page;
-            updateData(false, '📄 翻页中...', `正在跳转到第${page}页`);
+            updateData(false, '📄 翻页中...', '正在跳转到第' + page + '页');
         }
         
         // 用户筛选功能
@@ -1509,7 +1509,7 @@ HTML_TEMPLATE = '''
             const userSelect = document.getElementById('user-select');
             const selectedUser = userSelect.options[userSelect.selectedIndex].text;
             const loadingText = selectedUser.includes('全部') ? '📊 切换到全部用户...' : '👤 筛选用户数据中...';
-            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : `正在筛选 ${selectedUser} 的数据`;
+            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : '正在筛选 ' + selectedUser + ' 的数据';
             
             updateData(true, loadingText, loadingSubtext);
         }
