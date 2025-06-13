@@ -786,10 +786,10 @@ HTML_TEMPLATE = '''
             try {
                 // 更新最后刷新时间
                 document.getElementById('last-update').textContent = 
-                    \`最后更新: \${new Date().toLocaleString()}\`;
+                    '最后更新: ' + new Date().toLocaleString();
                 
                 // 获取数据
-                const response = await fetch(\`/api/data?start_date=\${startDate}&end_date=\${endDate}&user_id=\${userId}\`);
+                const response = await fetch('/api/data?start_date=' + startDate + '&end_date=' + endDate + '&user_id=' + userId);
                 const data = await response.json();
                 
                 // 更新KPI指标
@@ -815,32 +815,31 @@ HTML_TEMPLATE = '''
         
         // 更新KPI指标
         function updateMetrics(metrics) {
-            const metricsHtml = \`
-                <div class="metric-card">
-                    <div class="metric-value">\${metrics.total_views.toLocaleString()}</div>
-                    <div class="metric-label">📊 简历查看总数</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">\${metrics.passed_screening.toLocaleString()}</div>
-                    <div class="metric-label">✅ 通过筛选数量</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">\${metrics.boss_chats.toLocaleString()}</div>
-                    <div class="metric-label">💬 Boss聊天数量</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">\${metrics.contact_exchanges.toLocaleString()}</div>
-                    <div class="metric-label">🤝 建联成功数量</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">\${metrics.connection_rate.toFixed(1)}%</div>
-                    <div class="metric-label">📈 建联转化率</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">\${metrics.chat_rate.toFixed(1)}%</div>
-                    <div class="metric-label">🎯 聊天转化率</div>
-                </div>
-            \`;
+            const metricsHtml = 
+                '<div class="metric-card">' +
+                    '<div class="metric-value">' + metrics.total_views.toLocaleString() + '</div>' +
+                    '<div class="metric-label">📊 简历查看总数</div>' +
+                '</div>' +
+                '<div class="metric-card">' +
+                    '<div class="metric-value">' + metrics.passed_screening.toLocaleString() + '</div>' +
+                    '<div class="metric-label">✅ 通过筛选数量</div>' +
+                '</div>' +
+                '<div class="metric-card">' +
+                    '<div class="metric-value">' + metrics.boss_chats.toLocaleString() + '</div>' +
+                    '<div class="metric-label">💬 Boss聊天数量</div>' +
+                '</div>' +
+                '<div class="metric-card">' +
+                    '<div class="metric-value">' + metrics.contact_exchanges.toLocaleString() + '</div>' +
+                    '<div class="metric-label">🤝 建联成功数量</div>' +
+                '</div>' +
+                '<div class="metric-card">' +
+                    '<div class="metric-value">' + metrics.connection_rate.toFixed(1) + '%</div>' +
+                    '<div class="metric-label">📈 建联转化率</div>' +
+                '</div>' +
+                '<div class="metric-card">' +
+                    '<div class="metric-value">' + metrics.chat_rate.toFixed(1) + '%</div>' +
+                    '<div class="metric-label">🎯 聊天转化率</div>' +
+                '</div>';
             document.getElementById('metrics').innerHTML = metricsHtml;
         }
         
@@ -857,7 +856,7 @@ HTML_TEMPLATE = '''
             let tableHtml = '<table class="data-table"><thead><tr>';
             
             headers.forEach(header => {
-                tableHtml += \`<th>\${header}</th>\`;
+                tableHtml += '<th>' + header + '</th>';
             });
             tableHtml += '</tr></thead><tbody>';
             
@@ -866,7 +865,7 @@ HTML_TEMPLATE = '''
             displayData.forEach(row => {
                 tableHtml += '<tr>';
                 headers.forEach(header => {
-                    tableHtml += \`<td>\${row[header] || ''}</td>\`;
+                    tableHtml += '<td>' + (row[header] || '') + '</td>';
                 });
                 tableHtml += '</tr>';
             });
@@ -874,9 +873,9 @@ HTML_TEMPLATE = '''
             tableHtml += '</tbody></table>';
             
             if (tableData.length > 100) {
-                tableHtml += \`<p style="text-align: center; margin-top: 1rem; color: #CBD5E1;">
-                    显示前100条数据，共\${tableData.length}条记录
-                </p>\`;
+                tableHtml += '<p style="text-align: center; margin-top: 1rem; color: #CBD5E1;">' +
+                    '显示前100条数据，共' + tableData.length + '条记录' +
+                '</p>';
             }
             
             document.getElementById('data-table').innerHTML = tableHtml;
@@ -889,14 +888,14 @@ HTML_TEMPLATE = '''
             const userId = document.getElementById('user-select').value;
             
             try {
-                const response = await fetch(\`/api/export?format=\${format}&start_date=\${startDate}&end_date=\${endDate}&user_id=\${userId}\`);
+                const response = await fetch('/api/export?format=' + format + '&start_date=' + startDate + '&end_date=' + endDate + '&user_id=' + userId);
                 
                 if (response.ok) {
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = \`招聘数据_\${new Date().toISOString().split('T')[0]}.\${format}\`;
+                    a.download = '招聘数据_' + new Date().toISOString().split('T')[0] + '.' + format;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
@@ -954,7 +953,7 @@ HTML_TEMPLATE = '''
                                 label: function(context) {
                                     const value = context.parsed.x;
                                     const rate = chartData.conversion_rates[context.dataIndex];
-                                    return `数量: ${value} | 转化率: ${rate}%`;
+                                    return '数量: ' + value + ' | 转化率: ' + rate + '%';
                                 }
                             }
                         }
