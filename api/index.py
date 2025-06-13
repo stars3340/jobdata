@@ -763,6 +763,7 @@ HTML_TEMPLATE = '''
         </div>
         <div class="refresh-section">
             <span id="last-update" class="last-update">数据加载中...</span>
+            <button class="btn" onclick="testDebugData()" style="margin-right: 1rem;">🧪 测试数据</button>
             <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
         </div>
     </header>
@@ -889,6 +890,17 @@ HTML_TEMPLATE = '''
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 页面加载完成，开始初始化...');
+            
+            // 确保所有元素都存在
+            const dataTable = document.getElementById('data-table');
+            const overlay = document.getElementById('table-loading-overlay');
+            const wrapper = document.getElementById('data-table-wrapper');
+            
+            console.log('📋 数据表元素:', dataTable ? '✅' : '❌');
+            console.log('🎭 遮罩元素:', overlay ? '✅' : '❌');
+            console.log('📦 包装元素:', wrapper ? '✅' : '❌');
+            
             loadUsers();
             updateData(false, '🚀 初始化中...', '正在加载页面数据');
             setupAutoRefresh();
@@ -973,6 +985,45 @@ HTML_TEMPLATE = '''
             updateData(false, '🔄 刷新数据中...', '正在获取最新数据');
         }
         
+        // 测试调试数据
+        async function testDebugData() {
+            try {
+                showTableLoading('🧪 加载测试数据...', '正在获取调试数据');
+                
+                const response = await fetch('/api/debug');
+                const data = await response.json();
+                
+                console.log('🧪 调试数据:', data);
+                
+                if (!response.ok) {
+                    throw new Error('调试API请求失败: ' + response.status);
+                }
+                
+                // 更新界面
+                if (data.metrics) {
+                    updateMetrics(data.metrics);
+                }
+                
+                if (data.funnel_chart) {
+                    updateFunnelChart(data.funnel_chart);
+                }
+                
+                updateDataTable(data.table_data, data.pagination);
+                
+                // 更新最后刷新时间
+                document.getElementById('last-update').textContent = 
+                    '测试数据加载时间: ' + new Date().toLocaleString();
+                
+                alert('✅ 测试数据加载成功！如果能看到测试数据，说明前端功能正常。');
+                
+            } catch (error) {
+                console.error('🧪 测试数据失败:', error);
+                alert('❌ 测试数据也失败了: ' + error.message);
+            } finally {
+                hideTableLoading();
+            }
+        }
+        
         // 设置自动刷新
         function setupAutoRefresh() {
             const select = document.getElementById('refresh-interval');
@@ -994,22 +1045,44 @@ HTML_TEMPLATE = '''
         
         // 显示加载状态
         function showTableLoading(text = '数据处理中...', subtext = '请稍候') {
+            console.log('🔄 显示加载状态:', text);
+            
             const overlay = document.getElementById('table-loading-overlay');
             const wrapper = document.getElementById('data-table-wrapper');
             
-            overlay.querySelector('.table-loading-text').textContent = text;
-            overlay.querySelector('.table-loading-subtext').textContent = subtext;
-            overlay.style.display = 'flex';
-            wrapper.classList.add('loading');
+            if (overlay && wrapper) {
+                try {
+                    overlay.querySelector('.table-loading-text').textContent = text;
+                    overlay.querySelector('.table-loading-subtext').textContent = subtext;
+                    overlay.style.display = 'flex';
+                    wrapper.classList.add('loading');
+                    console.log('✅ 加载状态已显示');
+                } catch (error) {
+                    console.error('❌ 显示加载状态失败:', error);
+                }
+            } else {
+                console.error('❌ 找不到加载元素');
+            }
         }
         
         // 隐藏加载状态
         function hideTableLoading() {
+            console.log('⏹️ 隐藏加载状态');
+            
             const overlay = document.getElementById('table-loading-overlay');
             const wrapper = document.getElementById('data-table-wrapper');
             
-            overlay.style.display = 'none';
-            wrapper.classList.remove('loading');
+            if (overlay && wrapper) {
+                try {
+                    overlay.style.display = 'none';
+                    wrapper.classList.remove('loading');
+                    console.log('✅ 加载状态已隐藏');
+                } catch (error) {
+                    console.error('❌ 隐藏加载状态失败:', error);
+                }
+            } else {
+                console.error('❌ 找不到加载元素');
+            }
         }
         
         // 更新所有数据
@@ -1079,6 +1152,24 @@ HTML_TEMPLATE = '''
                 
             } catch (error) {
                 console.error('更新数据失败:', error);
+                
+                // 显示错误状态
+                const dataTableElement = document.getElementById('data-table');
+                if (dataTableElement) {
+                    dataTableElement.innerHTML = 
+                        '<div class="table-loading">' +
+                            '<div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>' +
+                            '<div class="table-loading-text">数据加载失败</div>' +
+                            '<div class="table-loading-subtext">请检查网络连接或稍后重试</div>' +
+                        '</div>';
+                }
+                
+                // 清空分页控件
+                const paginationElement = document.getElementById('pagination-controls');
+                if (paginationElement) {
+                    paginationElement.innerHTML = '';
+                }
+                
                 showError('数据加载失败，请稍后重试');
             } finally {
                 // 确保加载动画被隐藏
@@ -1122,15 +1213,18 @@ HTML_TEMPLATE = '''
             console.log('数据类型:', typeof tableData, '数据长度:', tableData ? tableData.length : 'null');
             console.log('分页信息:', pagination);
             
+            const dataTableElement = document.getElementById('data-table');
+            const paginationElement = document.getElementById('pagination-controls');
+            
             if (!tableData || tableData.length === 0) {
                 console.log('数据表为空，显示暂无数据');
-                document.getElementById('data-table').innerHTML = 
+                dataTableElement.innerHTML = 
                     '<div class="table-loading">' +
                         '<div style="font-size: 2rem; margin-bottom: 1rem;">📭</div>' +
                         '<div class="table-loading-text">暂无数据</div>' +
                         '<div class="table-loading-subtext">请尝试调整筛选条件或搜索关键词</div>' +
                     '</div>';
-                document.getElementById('pagination-controls').innerHTML = '';
+                paginationElement.innerHTML = '';
                 return;
             }
             
@@ -1175,11 +1269,17 @@ HTML_TEMPLATE = '''
             
             tableHtml += '</tbody></table>';
             
-            document.getElementById('data-table').innerHTML = tableHtml;
+            // 确保清除任何加载状态并显示表格
+            dataTableElement.innerHTML = tableHtml;
+            console.log('✅ 表格HTML已更新');
             
             // 更新分页控件
             if (pagination) {
                 updatePagination(pagination);
+                console.log('✅ 分页控件已更新');
+            } else {
+                paginationElement.innerHTML = '';
+                console.log('⚠️ 无分页信息，清空分页控件');
             }
         }
         
@@ -1487,6 +1587,54 @@ def api_health():
             'status': 'error',
             'database': 'exception',
             'error': str(e)
+        }), 500
+
+# API路由：调试数据
+@app.route('/api/debug')
+def api_debug():
+    """调试API - 返回简单的测试数据"""
+    try:
+        # 简单的测试数据
+        test_data = [
+            {'日期': '2025-06-13', '用户名': '测试用户1', '事件类型': '查看简历', '次数': 10},
+            {'日期': '2025-06-12', '用户名': '测试用户2', '事件类型': '简历通过筛选', '次数': 5},
+        ]
+        
+        return jsonify({
+            'metrics': {
+                'total_views': 100,
+                'passed_screening': 50,
+                'boss_chats': 20,
+                'contact_exchanges': 10,
+                'connection_rate': 20.0,
+                'chat_rate': 40.0
+            },
+            'funnel_chart': {
+                'labels': ['查看简历', '简历通过筛选', 'Boss上聊天', '交换联系方式'],
+                'data': [100, 50, 20, 10],
+                'conversion_rates': [100, 50, 40, 50],
+                'colors': ['#06D6A0', '#118AB2', '#FFD166', '#EF476F']
+            },
+            'trend_chart': {
+                'labels': ['2025-06-11', '2025-06-12', '2025-06-13'],
+                'datasets': []
+            },
+            'table_data': test_data,
+            'pagination': {
+                'total': 2,
+                'page': 1,
+                'page_size': 20,
+                'total_pages': 1
+            },
+            'debug': {
+                'message': '这是测试数据',
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'message': '调试API也失败了'
         }), 500
 
 # API路由：获取用户列表
