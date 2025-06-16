@@ -1,8 +1,8 @@
-# 🆓 零成本部署方案 - Render + ElephantSQL
+# 🆓 零成本部署方案 - Render + 免费PostgreSQL
 
-> **推荐方案**: Render + ElephantSQL - 完全免费且稳定可靠
+> **推荐方案**: Render + 免费PostgreSQL - 完全免费且稳定可靠
 
-## 🎯 **唯一推荐方案：Render + ElephantSQL**
+## 🎯 **推荐方案：Render + 免费PostgreSQL**
 
 ```bash
 💰 成本: 完全免费
@@ -36,12 +36,26 @@
 - **存储**: 1GB SSD
 - **自动休眠**: 15分钟无活动后休眠
 
-### ElephantSQL免费计划
-- **存储**: 20MB
-- **连接数**: 5个并发连接
+### 免费PostgreSQL服务对比
+
+#### Supabase免费计划 (推荐)
+- **存储**: 500MB
+- **行数**: 最多50万行
+- **API请求**: 50万次/月
 - **无时间限制**: 永久免费
-- **备份**: 手动备份
+- **备份**: 7天自动备份
 - **SSL**: 默认启用
+
+#### Neon免费计划
+- **存储**: 10GB
+- **计算时间**: 191小时/月
+- **自动暂停**: 5分钟无活动后暂停
+- **分支**: 10个数据库分支
+
+#### Railway PostgreSQL
+- **存储**: 100MB
+- **连接数**: 无限制
+- **备份**: 手动备份
 
 ## 🚀 立即开始部署
 
@@ -54,12 +68,15 @@
 5. 配置部署设置
 ```
 
-**第二步：ElephantSQL数据库**
+**第二步：免费PostgreSQL数据库**
 ```bash
-1. 访问 https://www.elephantsql.com/
-2. 创建免费实例 "Tiny Turtle"
-3. 获取连接信息
-4. 在Render中配置环境变量
+推荐选择：
+1. 🥇 Supabase (https://supabase.com/) - 500MB存储
+2. 🥈 Neon (https://neon.tech/) - 10GB存储  
+3. 🥉 Railway PostgreSQL - 100MB存储
+
+创建数据库并获取连接信息
+在Render中配置对应的环境变量
 ```
 
 ## 💡 优化建议
@@ -99,25 +116,24 @@ DELETE FROM recruit_event WHERE event_date < '2024-01-01';
 
 ## 🛠 替代方案
 
-### 如果ElephantSQL空间不够
+### 如果当前数据库空间不够
 
-1. **Supabase PostgreSQL**
+1. **升级到更大免费额度服务**
    ```
-   🔗 https://supabase.com/
-   免费额度：500MB数据库
+   从Railway(100MB) → Supabase(500MB) → Neon(10GB)
    ```
 
-2. **PlanetScale (MySQL)**
+2. **PlanetScale (MySQL替代)**
    ```
    🔗 https://planetscale.com/
    免费额度：10GB数据库
-   但需要修改PostgreSQL代码为MySQL
+   需要修改PostgreSQL代码为MySQL兼容
    ```
 
-3. **Aiven (PostgreSQL)**
+3. **本地SQLite (开发测试)**
    ```
-   🔗 https://aiven.io/
-   免费额度：1个月试用
+   适合演示和测试环境
+   无网络依赖，但功能有限
    ```
 
 ## 📞 获取帮助

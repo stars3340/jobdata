@@ -1,37 +1,86 @@
-# 🎨 Render + ElephantSQL 完整部署指南
+# 🎨 Render + 免费PostgreSQL 完整部署指南
 
-> 🆓 **完全免费** - Render提供750小时/月 + ElephantSQL提供20MB免费PostgreSQL
+> 🆓 **完全免费** - Render提供750小时/月 + 多种免费PostgreSQL选择
 
 ## 🚀 详细部署步骤
 
 ### 📋 部署前准备检查
 - ✅ GitHub代码已推送（包含优化后的 `requirements.txt`）
 - ✅ 项目已清理无用文件，减小依赖大小
-- ✅ 了解Render和ElephantSQL的免费额度
+- ✅ 选择免费PostgreSQL服务提供商
 
-### 第一步：创建ElephantSQL数据库
+### 第一步：选择并创建免费PostgreSQL数据库
 
-1. **注册ElephantSQL账户**
+> ⚠️ **注意**: ElephantSQL已于2025年1月27日停止服务，以下是最佳替代方案
+
+#### 🥇 **方案A：Supabase (推荐)**
+
+1. **注册Supabase账户**
    ```
-   🔗 https://www.elephantsql.com/
+   🔗 https://supabase.com/
    ```
-   - 点击 "Get a managed database today"
-   - 使用GitHub或邮箱注册
+   - 点击 "Start your project"
+   - 使用GitHub账户登录
 
-2. **创建免费数据库实例**
-   - 点击 "Create New Instance"
-   - **Name**: `recruitment-db`
-   - **Plan**: 选择 "Tiny Turtle (Free)" - 20MB
-   - **Region**: 选择离您最近的区域（推荐US-East-1）
-   - 点击 "Create instance"
+2. **创建项目**
+   - 点击 "New Project"
+   - **Project name**: `recruitment-dashboard`
+   - **Database password**: 设置强密码
+   - **Region**: 选择离您最近的区域
+   - 点击 "Create new project"
 
 3. **获取数据库连接信息**
    ```bash
-   # 在实例详情页面复制以下信息：
-   URL: postgres://username:password@host:5432/database
-   Server: your-server.db.elephantsql.com
-   User & Default database: your-username  
-   Password: your-password
+   # 在项目设置 → Database 中找到：
+   Host: db.xxx.supabase.co
+   Database name: postgres
+   Port: 5432
+   User: postgres
+   Password: [您设置的密码]
+   
+   # 连接字符串格式：
+   postgresql://postgres:[password]@db.xxx.supabase.co:5432/postgres
+   ```
+
+#### 🥈 **方案B：Neon**
+
+1. **注册Neon账户**
+   ```
+   🔗 https://neon.tech/
+   ```
+   - 点击 "Sign up"
+   - 使用GitHub账户登录
+
+2. **创建数据库**
+   - 自动创建默认项目
+   - **Database name**: `recruitment-db`
+   - **Region**: 选择离您最近的区域
+
+3. **获取连接信息**
+   ```bash
+   # 在项目面板的 Connection Details 中：
+   Host: ep-xxx.us-east-1.aws.neon.tech
+   Database: neondb
+   Username: your-username
+   Password: [自动生成]
+   ```
+
+#### 🥉 **方案C：Railway PostgreSQL**
+
+1. **注册Railway账户**
+   ```
+   🔗 https://railway.app/
+   ```
+   
+2. **仅创建数据库服务**
+   - 点击 "New Project" → "Empty Project"
+   - 点击 "+ Add Service" → "Database" → "PostgreSQL"
+   - Railway会自动创建数据库实例
+
+3. **获取连接信息**
+   ```bash
+   # 在PostgreSQL服务的 Connect 标签中：
+   DATABASE_URL=postgresql://postgres:password@containers-us-west-xxx.railway.app:5432/railway
    ```
 
 ### 第二步：配置Render Web服务
@@ -76,11 +125,23 @@
    ```bash
    # === 数据库配置 ===
    DB_TYPE=postgresql
-   DB_HOST=[从ElephantSQL复制服务器地址]
+   
+   # 根据您选择的数据库服务填入：
+   # 🔗 Supabase:
+   DB_HOST=db.xxx.supabase.co
    DB_PORT=5432
-   DB_USER=[从ElephantSQL复制用户名]
-   DB_PASSWORD=[从ElephantSQL复制密码]
-   DB_NAME=[从ElephantSQL复制数据库名]
+   DB_USER=postgres
+   DB_PASSWORD=[您设置的Supabase密码]
+   DB_NAME=postgres
+   
+   # 🔗 Neon:
+   # DB_HOST=ep-xxx.us-east-1.aws.neon.tech
+   # DB_USER=[Neon用户名]
+   # DB_PASSWORD=[Neon密码]
+   # DB_NAME=neondb
+   
+   # 🔗 Railway:
+   # DATABASE_URL=[Railway完整连接字符串]
    
    # === 应用配置 ===
    APP_HOST=0.0.0.0
@@ -94,16 +155,17 @@
    # === 缓存配置 ===
    CACHE_TYPE=simple
    CACHE_DEFAULT_TIMEOUT=300
-   
-   # === 可选：DATABASE_URL (ElephantSQL完整连接字符串) ===
-   DATABASE_URL=[从ElephantSQL复制完整URL]
    ```
 
 ### 第四步：初始化数据库
 
 1. **创建数据表结构**
    
-   在ElephantSQL控制台中，进入您的实例 → "BROWSER" 标签，执行以下SQL：
+   根据您选择的数据库服务，在相应的SQL编辑器中执行以下SQL：
+   
+   **🔗 Supabase**: 项目面板 → "SQL Editor" → "New query"
+   **🔗 Neon**: 项目面板 → "SQL Editor" 
+   **🔗 Railway**: PostgreSQL服务 → "Data" 标签 → "Query"
 
    ```sql
    -- 创建用户表
@@ -225,13 +287,29 @@
 - **自动休眠**: 15分钟无活动后休眠
 - **启动时间**: 休眠后30-60秒冷启动
 
-### ElephantSQL免费计划
-- **存储**: 20MB
-- **连接数**: 5个并发连接
+### 免费PostgreSQL服务对比
+
+#### Supabase免费计划 (推荐)
+- **存储**: 500MB
+- **行数**: 最多50万行
+- **API请求**: 50万次/月
+- **数据传输**: 2GB/月
 - **无时间限制**: 永久免费
-- **备份**: 手动备份支持
 - **SSL**: 默认启用
-- **支持**: 社区支持
+- **备份**: 7天自动备份
+
+#### Neon免费计划
+- **存储**: 10GB
+- **数据传输**: 无限制
+- **计算时间**: 191小时/月
+- **自动暂停**: 5分钟无活动后暂停
+- **分支**: 10个数据库分支
+
+#### Railway PostgreSQL免费计划
+- **存储**: 100MB
+- **运行时间**: 与应用共享500小时/月
+- **连接数**: 无限制
+- **备份**: 手动备份
 
 ## 🔧 部署后优化
 
@@ -273,7 +351,7 @@ Render免费服务会在15分钟无活动后休眠，使用监控服务保持活
        keep_alive()
    ```
 
-### 数据库空间优化（20MB限制）
+### 数据库优化和监控
 
 1. **数据类型优化**
    ```sql
@@ -283,33 +361,43 @@ Render免费服务会在15分钟无活动后休眠，使用监控服务保持活
    SMALLINT 而不是 INTEGER（当数值范围小时）
    ```
 
-2. **定期数据清理**
+2. **定期数据维护**
    ```sql
-   -- 删除90天前的旧数据
+   -- 清理旧数据（可选，基于业务需求）
    DELETE FROM recruit_event 
-   WHERE event_date < NOW() - INTERVAL '90 days';
+   WHERE event_date < NOW() - INTERVAL '180 days';
    
-   -- 压缩表空间
-   VACUUM FULL recruit_event;
+   -- 优化表性能
+   VACUUM ANALYZE recruit_event;
+   
+   -- 重建索引（如果需要）
+   REINDEX TABLE recruit_event;
    ```
 
-3. **监控数据库大小**
+3. **监控数据库使用情况**
    ```sql
    -- 查看数据库大小
    SELECT 
-       schemaname,
-       tablename,
-       attname,
-       n_distinct,
-       most_common_vals
-   FROM pg_stats 
-   WHERE tablename = 'recruit_event';
+       pg_size_pretty(pg_database_size(current_database())) as database_size;
    
-   -- 查看表大小
+   -- 查看各表大小
    SELECT 
        tablename,
-       pg_size_pretty(pg_total_relation_size(tablename::text)) as size
+       pg_size_pretty(pg_total_relation_size(tablename::text)) as size,
+       pg_size_pretty(pg_relation_size(tablename::text)) as table_size,
+       pg_size_pretty(pg_total_relation_size(tablename::text) - pg_relation_size(tablename::text)) as indexes_size
    FROM pg_tables 
+   WHERE schemaname = 'public'
+   ORDER BY pg_total_relation_size(tablename::text) DESC;
+   
+   -- 查看行数统计
+   SELECT 
+       schemaname,
+       tablename,
+       n_tup_ins as "插入行数",
+       n_tup_upd as "更新行数", 
+       n_tup_del as "删除行数"
+   FROM pg_stat_user_tables
    WHERE schemaname = 'public';
    ```
 
@@ -398,12 +486,14 @@ FATAL: password authentication failed
 **解决方案**:
 ```bash
 # 验证环境变量
-1. 检查ElephantSQL连接信息是否正确
+1. 检查数据库连接信息是否正确
 2. 确认DB_HOST没有包含协议前缀(postgresql://)
 3. 验证DB_PASSWORD是否包含特殊字符需要转义
 
 # 测试数据库连接
-在ElephantSQL控制台 → BROWSER 中测试连接
+🔗 Supabase: 项目面板 → SQL Editor 执行 SELECT 1;
+🔗 Neon: 项目面板 → SQL Editor 执行 SELECT version();
+🔗 Railway: PostgreSQL服务 → Data → Query 执行 SELECT current_database();
 ```
 
 #### 3. 应用启动失败
@@ -468,18 +558,23 @@ jobs:
 ```
 
 #### 6. 数据库空间不足
-**症状**: ElephantSQL 20MB空间用完
+**症状**: 免费数据库空间用完
 ```bash
 ERROR: could not extend file "base/16384/16389": No space left on device
 ```
 
 **解决方案**:
 ```bash
-# 清理旧数据
-DELETE FROM recruit_event WHERE event_date < NOW() - INTERVAL '90 days';
+# 1. 清理旧数据
+DELETE FROM recruit_event WHERE event_date < NOW() - INTERVAL '180 days';
 VACUUM FULL;
 
-# 升级到付费方案或迁移到Supabase (500MB免费)
+# 2. 检查当前使用情况
+SELECT pg_size_pretty(pg_database_size(current_database()));
+
+# 3. 如果仍然不够，考虑迁移到更大免费额度的服务：
+# Supabase: 500MB 免费存储
+# Neon: 10GB 免费存储
 ```
 
 ### 🔍 调试工具
@@ -507,13 +602,25 @@ python app.py
 
 #### 3. 数据库调试
 ```bash
-# 在ElephantSQL控制台中
-1. BROWSER标签：执行SQL查询
-2. STATS标签：查看连接统计
-3. LOGS标签：查看连接日志
+# 根据数据库服务选择调试方法：
 
-# 测试连接的SQL
-SELECT current_database(), current_user, version();
+# 🔗 Supabase
+1. SQL Editor：执行查询和调试
+2. Database → Logs：查看连接日志
+3. Settings → API：查看连接统计
+
+# 🔗 Neon  
+1. SQL Editor：执行查询
+2. Operations：查看操作历史
+3. Settings → Connection pooling：连接池设置
+
+# 🔗 Railway
+1. Data标签：执行SQL查询
+2. Metrics：查看数据库性能
+3. Logs：查看连接日志
+
+# 通用测试连接SQL
+SELECT current_database(), current_user, version(), NOW();
 ```
 
 ### 📞 获取帮助
