@@ -768,9 +768,8 @@ HTML_TEMPLATE = '''
         </div>
         <div class="refresh-section">
             <span id="last-update" class="last-update">数据加载中...</span>
-            <button class="btn" onclick="testDebugData()" style="margin-right: 1rem;">🧪 测试数据</button>
-                            <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
-                <button class="btn" onclick="testDebugData()" style="background: #FFD166; margin-left: 10px;">🧪 测试数据</button>
+            <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
+            <button class="btn" onclick="testDebugData()" style="background: #FFD166; margin-left: 10px;">🧪 测试数据</button>
         </div>
     </header>
     
@@ -1520,6 +1519,45 @@ HTML_TEMPLATE = '''
             updateData(true, loadingText, loadingSubtext);
         }
         
+        // 搜索功能
+        function searchTable() {
+            const searchText = document.getElementById('table-search').value;
+            tableState.searchText = searchText;
+            const loadingText = searchText ? '🔍 搜索数据中...' : '📊 加载数据中...';
+            const loadingSubtext = searchText ? '正在搜索包含 "' + searchText + '" 的记录' : '正在获取全部数据';
+            updateData(true, loadingText, loadingSubtext); // 重置到第一页
+        }
+        
+        // 清除搜索
+        function clearSearch() {
+            document.getElementById('table-search').value = '';
+            tableState.searchText = '';
+            updateData(true, '🔄 重置筛选中...', '正在恢复显示全部数据'); // 重置到第一页
+        }
+        
+        // 改变页面大小
+        function changePageSize() {
+            const newSize = parseInt(document.getElementById('page-size').value);
+            tableState.pageSize = newSize;
+            updateData(true, '📄 调整分页中...', '正在切换到每页' + newSize + '条记录'); // 重置到第一页
+        }
+        
+        // 表格排序
+        function sortTable(column) {
+            let sortDirection;
+            if (tableState.sortField === column) {
+                // 切换排序方向
+                tableState.sortOrder = tableState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
+                sortDirection = tableState.sortOrder === 'ASC' ? '升序' : '降序';
+            } else {
+                // 新列，默认降序
+                tableState.sortField = column;
+                tableState.sortOrder = 'DESC';
+                sortDirection = '降序';
+            }
+            updateData(false, '↕️ 数据排序中...', '正在按' + column + '进行' + sortDirection + '排序'); // 保持当前页
+        }
+        
         // 事件监听器
         document.addEventListener('DOMContentLoaded', function() {
             // 搜索框回车事件
@@ -1550,6 +1588,139 @@ HTML_TEMPLATE = '''
                 });
             }
         });
+        
+        // 跳转到指定页
+        function goToPage(page) {
+            tableState.page = page;
+            updateData(false, '📄 翻页中...', '正在跳转到第' + page + '页');
+        }
+        
+        // 导出数据
+        async function exportData(format) {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const userId = document.getElementById('user-select').value;
+            
+            try {
+                const response = await fetch('/api/export?format=' + format + '&start_date=' + startDate + '&end_date=' + endDate + '&user_id=' + userId);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '招聘数据_' + new Date().toISOString().split('T')[0] + '.' + format;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    showError('导出失败，请稍后重试');
+                }
+            } catch (error) {
+                console.error('导出失败:', error);
+                showError('导出失败，请稍后重试');
+            }
+        }
+        
+        // 显示错误信息
+        function showError(message) {
+            alert(message);
+        }
+        
+        // 更新漏斗图
+        function updateFunnelChart(chartData) {
+            // 简化实现 - 使用文本显示
+            const container = document.getElementById('funnel-chart').parentElement;
+            container.innerHTML = '<h3 class="chart-title">📊 招聘漏斗分析</h3><div style="padding: 20px; text-align: center;">';
+            
+            chartData.labels.forEach((label, index) => {
+                const count = chartData.data[index];
+                const rate = chartData.conversion_rates[index];
+                container.innerHTML += `<div style="margin: 10px; padding: 15px; background: rgba(35, 41, 70, 0.8); border-radius: 8px; border-left: 4px solid ${chartData.colors[index]};">
+                    <strong>${label}</strong>: ${count} 次 (转化率: ${rate}%)
+                </div>`;
+            });
+            
+            container.innerHTML += '</div>';
+        }
+        
+        // 更新趋势图
+        function updateTrendChart(chartData) {
+            // 简化实现 - 使用文本显示
+            const container = document.getElementById('trend-chart').parentElement;
+            container.innerHTML = '<h3 class="chart-title">📈 每日活动趋势</h3><div style="padding: 20px; text-align: center;">';
+            
+            chartData.labels.forEach((date, index) => {
+                container.innerHTML += `<div style="margin: 10px; padding: 10px; background: rgba(35, 41, 70, 0.8); border-radius: 8px;">
+                    <strong>${date}</strong><br>`;
+                
+                chartData.datasets.forEach(dataset => {
+                    const value = dataset.data[index];
+                    container.innerHTML += `${dataset.label}: ${value} `;
+                });
+                
+                container.innerHTML += '</div>';
+            });
+            
+            container.innerHTML += '</div>';
+        }
+        
+        // 更新分页控件
+        function updatePagination(pagination) {
+            const { total, page, pageSize, totalPages } = pagination;
+            let paginationHtml = '<div class="pagination">';
+            
+            // 上一页按钮
+            const prevDisabled = page <= 1 ? 'disabled' : '';
+            paginationHtml += '<button onclick="goToPage(' + (page - 1) + ')" ' + prevDisabled + '>⬅️ 上一页</button>';
+            
+            // 页码按钮
+            const startPage = Math.max(1, page - 2);
+            const endPage = Math.min(totalPages, page + 2);
+            
+            if (startPage > 1) {
+                paginationHtml += '<button onclick="goToPage(1)">1</button>';
+                if (startPage > 2) {
+                    paginationHtml += '<span style="color: #CBD5E1; padding: 0 0.5rem;">...</span>';
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const currentClass = i === page ? 'current-page' : '';
+                paginationHtml += '<button class="' + currentClass + '" onclick="goToPage(' + i + ')">' + i + '</button>';
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHtml += '<span style="color: #CBD5E1; padding: 0 0.5rem;">...</span>';
+                }
+                paginationHtml += '<button onclick="goToPage(' + totalPages + ')">' + totalPages + '</button>';
+            }
+            
+            // 下一页按钮
+            const nextDisabled = page >= totalPages ? 'disabled' : '';
+            paginationHtml += '<button onclick="goToPage(' + (page + 1) + ')" ' + nextDisabled + '>下一页 ➡️</button>';
+            
+            paginationHtml += '</div>';
+            
+            // 分页信息
+            const start = (page - 1) * pageSize + 1;
+            const end = Math.min(page * pageSize, total);
+            paginationHtml += '<div class="pagination-info">显示第 ' + start + '-' + end + ' 条，共 ' + total + ' 条记录</div>';
+            
+            document.getElementById('pagination-controls').innerHTML = paginationHtml;
+        }
+        
+        // 用户筛选功能
+        function handleUserChange() {
+            const userSelect = document.getElementById('user-select');
+            const selectedUser = userSelect.options[userSelect.selectedIndex].text;
+            const loadingText = selectedUser.includes('全部') ? '📊 切换到全部用户...' : '👤 筛选用户数据中...';
+            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : '正在筛选 ' + selectedUser + ' 的数据';
+            
+            updateData(true, loadingText, loadingSubtext);
+        }
     </script>
 </body>
 </html>
