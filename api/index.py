@@ -7,6 +7,7 @@
 
 import os
 import json
+import re
 from datetime import datetime, timedelta, date
 from flask import Flask, render_template_string, jsonify, request, Response
 import pymysql
@@ -21,6 +22,52 @@ from config import Config
 
 DB_CONFIG = Config.DB_CONFIG
 
+import contextlib
+import logging
+
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def validate_date(date_str):
+    """验证日期格式"""
+    if not date_str:
+        return None
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+        return date_str
+    except ValueError:
+        logger.warning(f"无效的日期格式: {date_str}")
+        return None
+
+def validate_user_id(user_id):
+    """验证用户ID"""
+    if not user_id:
+        return 'all'
+    # 允许 'all' 或者字母数字组合
+    if user_id == 'all' or re.match(r'^[a-zA-Z0-9_-]+$', str(user_id)):
+        return str(user_id)
+    logger.warning(f"无效的用户ID格式: {user_id}")
+    return 'all'
+
+def validate_page_params(page, page_size):
+    """验证分页参数"""
+    try:
+        page = max(1, int(page) if page else 1)
+        page_size = min(Config.MAX_PAGE_SIZE, max(1, int(page_size) if page_size else 20))
+        return page, page_size
+    except (ValueError, TypeError):
+        logger.warning(f"无效的分页参数: page={page}, page_size={page_size}")
+        return 1, 20
+
+def sanitize_search_text(search_text):
+    """清理搜索文本"""
+    if not search_text:
+        return ''
+    # 移除潜在的危险字符，保留中文、英文、数字和常用符号
+    cleaned = re.sub(r'[^\w\s\u4e00-\u9fff-]', '', str(search_text))
+    return cleaned[:50]  # 限制长度
+
 def get_db_connection():
     """获取数据库连接"""
     try:
@@ -34,34 +81,56 @@ def get_db_connection():
         })
         return pymysql.connect(**config)
     except Exception as e:
-        print(f"数据库连接失败: {e}")
+        logger.error(f"数据库连接失败: {e}")
         return None
 
-def query_data(sql):
-    """执行SQL查询，返回字典列表（替代pandas）"""
+@contextlib.contextmanager
+def get_db_cursor():
+    """数据库连接上下文管理器"""
     connection = get_db_connection()
-    if connection:
-        try:
-            cursor = connection.cursor(pymysql.cursors.DictCursor)
-            cursor.execute(sql)
+    if connection is None:
+        yield None
+        return
+    
+    try:
+        with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+            yield cursor
+    except Exception as e:
+        logger.error(f"数据库操作失败: {e}")
+        raise
+    finally:
+        connection.close()
+
+def query_data(sql, params=None):
+    """执行SQL查询，返回字典列表（使用上下文管理器）"""
+    try:
+        with get_db_cursor() as cursor:
+            if cursor is None:
+                logger.warning("数据库连接失败，返回空结果")
+                return []
+            
+            if params:
+                cursor.execute(sql, params)
+            else:
+                cursor.execute(sql)
             result = cursor.fetchall()
             return result
-        except Exception as e:
-            print(f"查询失败: {e}")
-            return []
-        finally:
-            connection.close()
-    return []
+    except Exception as e:
+        logger.error(f"数据库查询失败: {e}, SQL: {sql[:100]}..., 参数: {params}")
+        return []
 
 def get_funnel_data(start_date=None, end_date=None, user_id=None):
-    """获取漏斗数据（无pandas版本）"""
+    """获取漏斗数据（使用参数化查询）"""
     where_conditions = []
+    params = []
     
     if start_date and end_date:
-        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+        where_conditions.append("create_time BETWEEN %s AND %s")
+        params.extend([start_date, end_date + ' 23:59:59'])
     
     if user_id and user_id != 'all':
-        where_conditions.append(f"uid = '{user_id}'")
+        where_conditions.append("uid = %s")
+        params.append(user_id)
     
     where_clause = " AND ".join(where_conditions)
     if where_clause:
@@ -74,7 +143,7 @@ def get_funnel_data(start_date=None, end_date=None, user_id=None):
     ORDER BY count DESC
     """
     
-    result = query_data(sql)
+    result = query_data(sql, params)
     
     # 事件类型映射
     event_mapping = {
@@ -102,14 +171,17 @@ def get_funnel_data(start_date=None, end_date=None, user_id=None):
     return sorted(funnel_data, key=lambda x: x['order'])
 
 def get_trend_data(start_date=None, end_date=None, user_id=None):
-    """获取趋势数据（无pandas版本）"""
+    """获取趋势数据（使用参数化查询）"""
     where_conditions = []
+    params = []
     
     if start_date and end_date:
-        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+        where_conditions.append("create_time BETWEEN %s AND %s")
+        params.extend([start_date, end_date + ' 23:59:59'])
     
     if user_id and user_id != 'all':
-        where_conditions.append(f"uid = '{user_id}'")
+        where_conditions.append("uid = %s")
+        params.append(user_id)
     
     where_clause = " AND ".join(where_conditions)
     if where_clause:
@@ -126,7 +198,7 @@ def get_trend_data(start_date=None, end_date=None, user_id=None):
     LIMIT 100
     """
     
-    result = query_data(sql)
+    result = query_data(sql, params)
     
     # 事件类型映射
     event_mapping = {
@@ -279,7 +351,10 @@ HTML_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🚀 智能招聘数据分析平台</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Chart.js 依赖 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -714,6 +789,96 @@ HTML_TEMPLATE = '''
             gap: 1rem;
         }
         
+        /* 搜索框样式 */
+        .search-input {
+            padding: 0.5rem;
+            border: 1px solid rgba(6, 214, 160, 0.3);
+            border-radius: 6px;
+            background: rgba(35, 41, 70, 0.8);
+            color: #FFFFFF;
+            width: 250px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #06D6A0;
+            box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+        }
+        
+        .search-button {
+            margin-left: 0.5rem;
+            padding: 0.5rem 1rem;
+        }
+        
+        .page-size-select {
+            padding: 0.5rem;
+            border: 1px solid rgba(6, 214, 160, 0.3);
+            border-radius: 6px;
+            background: rgba(35, 41, 70, 0.8);
+            color: #FFFFFF;
+            margin-right: 1rem;
+        }
+        
+        .page-size-select:focus {
+            outline: none;
+            border-color: #06D6A0;
+            box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+        }
+        
+        /* 测试按钮样式 */
+        .test-button {
+            background: #FFD166;
+            margin-left: 10px;
+        }
+        
+        .test-button:hover {
+            background: #f7ca4d;
+        }
+        
+        /* 错误消息样式 */
+        .error-display {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(239, 71, 111, 0.1);
+            border: 1px solid rgba(239, 71, 111, 0.3);
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .error-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-title {
+            color: #EF476F;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .error-subtitle {
+            color: #CBD5E1;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        
+        .reload-button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #06D6A0;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .reload-button:hover {
+            background: #05c093;
+            transform: translateY(-2px);
+        }
+        
         /* 响应式设计 */
         @media (max-width: 768px) {
             .header {
@@ -740,7 +905,7 @@ HTML_TEMPLATE = '''
                 gap: 0.5rem;
             }
             
-            .search-box input {
+            .search-input {
                 width: 100% !important;
             }
             
@@ -768,8 +933,8 @@ HTML_TEMPLATE = '''
         </div>
         <div class="refresh-section">
             <span id="last-update" class="last-update">数据加载中...</span>
-            <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
-            <button class="btn" onclick="testDebugData()" style="background: #FFD166; margin-left: 10px;">🧪 测试数据</button>
+            <button id="refresh-btn" class="btn">🔄 刷新数据</button>
+            <button id="test-data-btn" class="btn test-button">🧪 测试数据</button>
         </div>
     </header>
     
@@ -802,11 +967,11 @@ HTML_TEMPLATE = '''
             <div class="control-group">
                 <label>⚡ 快速筛选</label>
                 <div class="quick-filters">
-                    <button class="quick-filter-btn" onclick="setQuickDate('today')">今天</button>
-                    <button class="quick-filter-btn" onclick="setQuickDate('yesterday')">昨天</button>
-                    <button class="quick-filter-btn active" onclick="setQuickDate('7days')">最近7天</button>
-                    <button class="quick-filter-btn" onclick="setQuickDate('30days')">最近30天</button>
-                    <button class="quick-filter-btn" onclick="setQuickDate('month')">本月</button>
+                    <button class="quick-filter-btn" data-type="today">今天</button>
+                    <button class="quick-filter-btn" data-type="yesterday">昨天</button>
+                    <button class="quick-filter-btn active" data-type="7days">最近7天</button>
+                    <button class="quick-filter-btn" data-type="30days">最近30天</button>
+                    <button class="quick-filter-btn" data-type="month">本月</button>
                 </div>
             </div>
         </div>
@@ -843,19 +1008,18 @@ HTML_TEMPLATE = '''
                 <div class="table-controls">
                     <div class="search-box">
                         <input type="text" id="table-search" placeholder="🔍 搜索用户、事件类型或日期..." 
-                               style="padding: 0.5rem; border: 1px solid rgba(6, 214, 160, 0.3); border-radius: 6px; background: rgba(35, 41, 70, 0.8); color: #FFFFFF; width: 250px;">
-                        <button class="btn" onclick="searchTable()" style="margin-left: 0.5rem; padding: 0.5rem 1rem;">搜索</button>
-                        <button class="btn btn-outline" onclick="clearSearch()" style="margin-left: 0.5rem; padding: 0.5rem 1rem;">清除</button>
+                               class="search-input">
+                        <button id="search-btn" class="btn search-button">搜索</button>
+                        <button id="clear-search-btn" class="btn btn-outline search-button">清除</button>
                     </div>
                     <div class="export-buttons">
-                        <select id="page-size" onchange="changePageSize()" 
-                                style="padding: 0.5rem; border: 1px solid rgba(6, 214, 160, 0.3); border-radius: 6px; background: rgba(35, 41, 70, 0.8); color: #FFFFFF; margin-right: 1rem;">
+                        <select id="page-size" class="page-size-select">
                             <option value="10">10条/页</option>
                             <option value="20" selected>20条/页</option>
                             <option value="50">50条/页</option>
                             <option value="100">100条/页</option>
                         </select>
-                        <button class="btn btn-outline" onclick="exportData('csv')">📄 导出CSV</button>
+                        <button id="export-csv-btn" class="btn btn-outline">📄 导出CSV</button>
                     </div>
                 </div>
             </div>
@@ -883,6 +1047,7 @@ HTML_TEMPLATE = '''
         let autoRefreshTimer = null;
         let funnelChart = null;
         let trendChart = null;
+        let searchDebounceTimer = null;
         
         // 表格状态
         let tableState = {
@@ -893,44 +1058,54 @@ HTML_TEMPLATE = '''
             searchText: ''
         };
         
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 页面加载完成，开始初始化...');
+        // 防抖函数
+        function debounce(func, wait) {
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(searchDebounceTimer);
+                    func(...args);
+                };
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(later, wait);
+            };
+        }
+        
+        // 防抖搜索函数
+        const debouncedSearch = debounce(() => {
+            const searchText = document.getElementById('table-search').value;
+            console.log('🔍 [SEARCH] 执行搜索:', searchText);
             
-            // 确保所有元素都存在
-            const dataTable = document.getElementById('data-table');
-            const overlay = document.getElementById('table-loading-overlay');
-            const wrapper = document.getElementById('data-table-wrapper');
-            
-            console.log('📋 数据表元素:', dataTable ? '✅' : '❌');
-            console.log('🎭 遮罩元素:', overlay ? '✅' : '❌');
-            console.log('📦 包装元素:', wrapper ? '✅' : '❌');
-            
-            loadUsers();
-            updateData(false, '🚀 初始化中...', '正在加载页面数据');
-            setupAutoRefresh();
-        });
+            tableState.searchText = searchText;
+            const loadingText = searchText ? '🔍 搜索数据中...' : '📊 加载数据中...';
+            const loadingSubtext = searchText ? `正在搜索包含 "${searchText}" 的记录` : '正在获取全部数据';
+            updateData(true, loadingText, loadingSubtext);
+        }, 500);
         
         // 加载用户列表
         async function loadUsers() {
             try {
+                console.log('👥 [USERS] 开始加载用户列表');
                 const response = await fetch('/api/users');
                 const users = await response.json();
                 const select = document.getElementById('user-select');
-                select.innerHTML = '';
-                users.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.value;
-                    option.textContent = user.label;
-                    select.appendChild(option);
-                });
+                if (select) {
+                    select.innerHTML = '';
+                    users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.value;
+                        option.textContent = user.label;
+                        select.appendChild(option);
+                    });
+                    console.log(`✅ [USERS] 用户列表加载完成，共 ${users.length} 个选项`);
+                }
             } catch (error) {
-                console.error('加载用户列表失败:', error);
+                console.error('❌ [USERS] 加载用户列表失败:', error);
             }
         }
         
         // 设置快速日期
         function setQuickDate(type) {
+            console.log('🗓️ 设置快速日期:', type);
             const today = new Date();
             let startDate, endDate;
             
@@ -939,7 +1114,18 @@ HTML_TEMPLATE = '''
                 btn.classList.remove('active'));
             
             // 添加当前按钮的active类
-            event.target.classList.add('active');
+            const buttonTextMap = {
+                'today': '今天',
+                'yesterday': '昨天', 
+                '7days': '最近7天',
+                '30days': '最近30天',
+                'month': '本月'
+            };
+            document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+                if (btn.textContent === buttonTextMap[type]) {
+                    btn.classList.add('active');
+                }
+            });
             
             switch(type) {
                 case 'today':
@@ -1316,145 +1502,276 @@ HTML_TEMPLATE = '''
             }
         }
         
-        // 显示错误信息
-        function showError(message) {
-            // 简单的错误提示，可以后续改进
-            alert(message);
+        // 搜索功能（立即搜索）
+        function searchTable() {
+            console.log('🔍 [SEARCH] 立即搜索按钮点击');
+            debouncedSearch();
+        }
+        
+        // 实时搜索（输入时触发）
+        function handleSearchInput() {
+            console.log('🔍 [SEARCH] 输入变化，启动防抖搜索');
+            debouncedSearch();
+        }
+        
+        // 清除搜索
+        function clearSearch() {
+            console.log('🔍 [SEARCH] 清除搜索');
+            const searchInput = document.getElementById('table-search');
+            if (searchInput) {
+                searchInput.value = '';
+                tableState.searchText = '';
+                updateData(true, '🔄 重置筛选中...', '正在恢复显示全部数据');
+            }
+        }
+        
+        // 改变页面大小
+        function changePageSize() {
+            const newSize = parseInt(document.getElementById('page-size').value);
+            tableState.pageSize = newSize;
+            updateData(true, '📄 调整分页中...', '正在切换到每页' + newSize + '条记录'); // 重置到第一页
+        }
+        
+        // 表格排序
+        function sortTable(column) {
+            let sortDirection;
+            if (tableState.sortField === column) {
+                // 切换排序方向
+                tableState.sortOrder = tableState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
+                sortDirection = tableState.sortOrder === 'ASC' ? '升序' : '降序';
+            } else {
+                // 新列，默认降序
+                tableState.sortField = column;
+                tableState.sortOrder = 'DESC';
+                sortDirection = '降序';
+            }
+            updateData(false, '↕️ 数据排序中...', '正在按' + column + '进行' + sortDirection + '排序'); // 保持当前页
+        }
+        
+        // 跳转到指定页
+        function goToPage(page) {
+            tableState.page = page;
+            updateData(false, '📄 翻页中...', '正在跳转到第' + page + '页');
+        }
+        
+        // 用户筛选功能
+        function handleUserChange() {
+            const userSelect = document.getElementById('user-select');
+            const selectedUser = userSelect.options[userSelect.selectedIndex].text;
+            const loadingText = selectedUser.includes('全部') ? '📊 切换到全部用户...' : '👤 筛选用户数据中...';
+            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : '正在筛选 ' + selectedUser + ' 的数据';
+            
+            updateData(true, loadingText, loadingSubtext);
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            console.log('⚡ [EVENTS] 开始设置事件监听器');
+            
+            // 刷新和测试按钮
+            document.getElementById('refresh-btn').addEventListener('click', refreshData);
+            document.getElementById('test-data-btn').addEventListener('click', testDebugData);
+
+            // 快速筛选按钮
+            document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => setQuickDate(btn.dataset.type));
+            });
+
+            // 搜索框事件
+            const searchInput = document.getElementById('table-search');
+            searchInput.addEventListener('keypress', e => e.key === 'Enter' && searchTable());
+            searchInput.addEventListener('input', handleSearchInput);
+
+            // 控制按钮
+            document.getElementById('search-btn').addEventListener('click', searchTable);
+            document.getElementById('clear-search-btn').addEventListener('click', clearSearch);
+            document.getElementById('page-size').addEventListener('change', changePageSize);
+            document.getElementById('export-csv-btn').addEventListener('click', () => exportData('csv'));
+
+            // 用户选择
+            document.getElementById('user-select').addEventListener('change', handleUserChange);
+
+            // 日期选择
+            document.getElementById('start-date').addEventListener('change', () => updateData(true, '📅 更新日期范围...', '正在加载指定时间段的数据'));
+            document.getElementById('end-date').addEventListener('change', () => updateData(true, '📅 更新日期范围...', '正在加载指定时间段的数据'));
+            
+            console.log('✅ [EVENTS] 所有事件监听器已设置');
         }
         
         // 更新漏斗图
         function updateFunnelChart(chartData) {
-            const ctx = document.getElementById('funnel-chart').getContext('2d');
+            console.log('📊 更新漏斗图:', chartData);
             
-            if (funnelChart) {
-                funnelChart.destroy();
+            if (!chartData || !chartData.labels || !chartData.data) {
+                console.warn('漏斗图数据无效');
+                return;
             }
             
-            funnelChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: chartData.labels,
-                    datasets: [{
-                        data: chartData.data,
-                        backgroundColor: chartData.colors,
-                        borderColor: chartData.colors,
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
+            const canvas = document.getElementById('funnel-chart');
+            if (!canvas) {
+                console.error('未找到漏斗图canvas元素');
+                return;
+            }
+            
+            try {
+                // 销毁现有图表
+                if (funnelChart) {
+                    funnelChart.destroy();
+                }
+                
+                // 创建新的柱状图（代替漏斗图）
+                funnelChart = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: '数量',
+                            data: chartData.data,
+                            backgroundColor: chartData.colors.map(color => color + '80'),
+                            borderColor: chartData.colors,
+                            borderWidth: 2,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(35, 41, 70, 0.95)',
+                                titleColor: '#FFFFFF',
+                                bodyColor: '#FFFFFF',
+                                borderColor: '#06D6A0',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        const index = context.dataIndex;
+                                        const count = chartData.data[index];
+                                        const rate = chartData.conversion_rates[index];
+                                        return `数量: ${count} (转化率: ${rate}%)`;
+                                    }
+                                }
+                            }
                         },
-                        title: {
-                            display: true,
-                            text: '招聘漏斗分析',
-                            color: '#FFFFFF',
-                            font: { size: 18 }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const value = context.parsed.x;
-                                    const rate = chartData.conversion_rates[context.dataIndex];
-                                    return '数量: ' + value + ' | 转化率: ' + rate + '%';
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#FFFFFF'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#FFFFFF',
+                                    maxRotation: 45
                                 }
                             }
                         }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#FFFFFF' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
-                        },
-                        y: {
-                            ticks: { color: '#FFFFFF' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
-                        }
                     }
-                }
-            });
+                });
+                
+                console.log('✅ 漏斗图更新成功');
+            } catch (error) {
+                console.error('❌ 漏斗图更新失败:', error);
+            }
         }
         
         // 更新趋势图
         function updateTrendChart(chartData) {
-            const ctx = document.getElementById('trend-chart').getContext('2d');
+            console.log('📈 更新趋势图:', chartData);
             
-            if (trendChart) {
-                trendChart.destroy();
+            if (!chartData || !chartData.labels || !chartData.datasets) {
+                console.warn('趋势图数据无效');
+                return;
             }
             
-            trendChart = new Chart(ctx, {
-                type: 'line',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            labels: { color: '#FFFFFF' }
-                        },
-                        title: {
-                            display: true,
-                            text: '每日活动趋势',
-                            color: '#FFFFFF',
-                            font: { size: 18 }
-                        }
+            const canvas = document.getElementById('trend-chart');
+            if (!canvas) {
+                console.error('未找到趋势图canvas元素');
+                return;
+            }
+            
+            try {
+                // 销毁现有图表
+                if (trendChart) {
+                    trendChart.destroy();
+                }
+                
+                // 创建新的折线图
+                trendChart = new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: chartData.datasets.map(dataset => ({
+                            ...dataset,
+                            fill: false,
+                            tension: 0.4,
+                            pointBackgroundColor: dataset.borderColor,
+                            pointBorderColor: '#FFFFFF',
+                            pointBorderWidth: 2,
+                            pointRadius: 5,
+                            pointHoverRadius: 8
+                        }))
                     },
-                    scales: {
-                        x: {
-                            ticks: { color: '#FFFFFF' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
                         },
-                        y: {
-                            ticks: { color: '#FFFFFF' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#FFFFFF',
+                                    usePointStyle: true,
+                                    padding: 20
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(35, 41, 70, 0.95)',
+                                titleColor: '#FFFFFF',
+                                bodyColor: '#FFFFFF',
+                                borderColor: '#06D6A0',
+                                borderWidth: 1
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#FFFFFF'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#FFFFFF',
+                                    maxRotation: 45
+                                }
+                            }
                         }
                     }
-                }
-            });
-        }
-        
-        // 搜索功能
-        function searchTable() {
-            const searchText = document.getElementById('table-search').value;
-            tableState.searchText = searchText;
-            const loadingText = searchText ? '🔍 搜索数据中...' : '📊 加载数据中...';
-            const loadingSubtext = searchText ? '正在搜索包含 "' + searchText + '" 的记录' : '正在获取全部数据';
-            updateData(true, loadingText, loadingSubtext); // 重置到第一页
-        }
-        
-        // 清除搜索
-        function clearSearch() {
-            document.getElementById('table-search').value = '';
-            tableState.searchText = '';
-            updateData(true, '🔄 重置筛选中...', '正在恢复显示全部数据'); // 重置到第一页
-        }
-        
-        // 改变页面大小
-        function changePageSize() {
-            const newSize = parseInt(document.getElementById('page-size').value);
-            tableState.pageSize = newSize;
-            updateData(true, '📄 调整分页中...', '正在切换到每页' + newSize + '条记录'); // 重置到第一页
-        }
-        
-        // 表格排序
-        function sortTable(column) {
-            let sortDirection;
-            if (tableState.sortField === column) {
-                // 切换排序方向
-                tableState.sortOrder = tableState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
-                sortDirection = tableState.sortOrder === 'ASC' ? '升序' : '降序';
-            } else {
-                // 新列，默认降序
-                tableState.sortField = column;
-                tableState.sortOrder = 'DESC';
-                sortDirection = '降序';
+                });
+                
+                console.log('✅ 趋势图更新成功');
+            } catch (error) {
+                console.error('❌ 趋势图更新失败:', error);
             }
-            updateData(false, '↕️ 数据排序中...', '正在按' + column + '进行' + sortDirection + '排序'); // 保持当前页
         }
         
         // 更新分页控件
@@ -1507,219 +1824,150 @@ HTML_TEMPLATE = '''
         function goToPage(page) {
             tableState.page = page;
             updateData(false, '📄 翻页中...', '正在跳转到第' + page + '页');
-        }
-        
-        // 用户筛选功能
-        function handleUserChange() {
-            const userSelect = document.getElementById('user-select');
-            const selectedUser = userSelect.options[userSelect.selectedIndex].text;
-            const loadingText = selectedUser.includes('全部') ? '📊 切换到全部用户...' : '👤 筛选用户数据中...';
-            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : '正在筛选 ' + selectedUser + ' 的数据';
-            
-            updateData(true, loadingText, loadingSubtext);
-        }
-        
-        // 搜索功能
-        function searchTable() {
-            const searchText = document.getElementById('table-search').value;
-            tableState.searchText = searchText;
-            const loadingText = searchText ? '🔍 搜索数据中...' : '📊 加载数据中...';
-            const loadingSubtext = searchText ? '正在搜索包含 "' + searchText + '" 的记录' : '正在获取全部数据';
-            updateData(true, loadingText, loadingSubtext); // 重置到第一页
-        }
-        
-        // 清除搜索
-        function clearSearch() {
-            document.getElementById('table-search').value = '';
-            tableState.searchText = '';
-            updateData(true, '🔄 重置筛选中...', '正在恢复显示全部数据'); // 重置到第一页
-        }
-        
-        // 改变页面大小
-        function changePageSize() {
-            const newSize = parseInt(document.getElementById('page-size').value);
-            tableState.pageSize = newSize;
-            updateData(true, '📄 调整分页中...', '正在切换到每页' + newSize + '条记录'); // 重置到第一页
-        }
-        
-        // 表格排序
-        function sortTable(column) {
-            let sortDirection;
-            if (tableState.sortField === column) {
-                // 切换排序方向
-                tableState.sortOrder = tableState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
-                sortDirection = tableState.sortOrder === 'ASC' ? '升序' : '降序';
-            } else {
-                // 新列，默认降序
-                tableState.sortField = column;
-                tableState.sortOrder = 'DESC';
-                sortDirection = '降序';
-            }
-            updateData(false, '↕️ 数据排序中...', '正在按' + column + '进行' + sortDirection + '排序'); // 保持当前页
-        }
-        
-        // 事件监听器
-        document.addEventListener('DOMContentLoaded', function() {
-            // 搜索框回车事件
-            const searchInput = document.getElementById('table-search');
-            if (searchInput) {
-                searchInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        searchTable();
-                    }
-                });
-            }
-            
-            // 用户选择变更事件
-            const userSelect = document.getElementById('user-select');
-            if (userSelect) {
-                userSelect.addEventListener('change', handleUserChange);
-            }
-            
-            // 日期筛选变更事件  
-            const startDateInput = document.getElementById('start-date');
-            const endDateInput = document.getElementById('end-date');
-            if (startDateInput && endDateInput) {
-                startDateInput.addEventListener('change', function() {
-                    updateData(true, '📅 更新日期范围...', '正在加载指定时间段的数据');
-                });
-                endDateInput.addEventListener('change', function() {
-                    updateData(true, '📅 更新日期范围...', '正在加载指定时间段的数据');
-                });
-            }
-        });
-        
-        // 跳转到指定页
-        function goToPage(page) {
-            tableState.page = page;
-            updateData(false, '📄 翻页中...', '正在跳转到第' + page + '页');
-        }
-        
-        // 导出数据
-        async function exportData(format) {
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;
-            const userId = document.getElementById('user-select').value;
-            
-            try {
-                const response = await fetch('/api/export?format=' + format + '&start_date=' + startDate + '&end_date=' + endDate + '&user_id=' + userId);
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = '招聘数据_' + new Date().toISOString().split('T')[0] + '.' + format;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                } else {
-                    showError('导出失败，请稍后重试');
-                }
-            } catch (error) {
-                console.error('导出失败:', error);
-                showError('导出失败，请稍后重试');
-            }
         }
         
         // 显示错误信息
         function showError(message) {
-            alert(message);
-        }
-        
-        // 更新漏斗图
-        function updateFunnelChart(chartData) {
-            // 简化实现 - 使用文本显示
-            const container = document.getElementById('funnel-chart').parentElement;
-            container.innerHTML = '<h3 class="chart-title">📊 招聘漏斗分析</h3><div style="padding: 20px; text-align: center;">';
+            console.error('🚨 错误:', message);
             
-            chartData.labels.forEach((label, index) => {
-                const count = chartData.data[index];
-                const rate = chartData.conversion_rates[index];
-                container.innerHTML += `<div style="margin: 10px; padding: 15px; background: rgba(35, 41, 70, 0.8); border-radius: 8px; border-left: 4px solid ${chartData.colors[index]};">
-                    <strong>${label}</strong>: ${count} 次 (转化率: ${rate}%)
-                </div>`;
-            });
+            // 创建错误消息元素
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-display';
+            errorDiv.innerHTML = `
+                <div class="error-icon">⚠️</div>
+                <div class="error-title">操作失败</div>
+                <div class="error-subtitle">${message}</div>
+                <button class="reload-button" onclick="this.parentElement.remove()">关闭</button>
+            `;
             
-            container.innerHTML += '</div>';
-        }
-        
-        // 更新趋势图
-        function updateTrendChart(chartData) {
-            // 简化实现 - 使用文本显示
-            const container = document.getElementById('trend-chart').parentElement;
-            container.innerHTML = '<h3 class="chart-title">📈 每日活动趋势</h3><div style="padding: 20px; text-align: center;">';
-            
-            chartData.labels.forEach((date, index) => {
-                container.innerHTML += `<div style="margin: 10px; padding: 10px; background: rgba(35, 41, 70, 0.8); border-radius: 8px;">
-                    <strong>${date}</strong><br>`;
+            // 添加到页面顶部
+            const container = document.querySelector('.container');
+            if (container) {
+                container.insertBefore(errorDiv, container.firstChild);
                 
-                chartData.datasets.forEach(dataset => {
-                    const value = dataset.data[index];
-                    container.innerHTML += `${dataset.label}: ${value} `;
-                });
+                // 5秒后自动移除
+                setTimeout(() => {
+                    if (errorDiv.parentElement) {
+                        errorDiv.remove();
+                    }
+                }, 5000);
+            } else {
+                // 降级到alert
+                alert(message);
+            }
+        }
+
+        // 页面初始化 - 统一初始化入口
+        async function initializePage() {
+            console.log('🚀 页面初始化开始...');
+            
+            try {
+                // 检查关键元素是否存在
+                const requiredElements = {
+                    'data-table': '数据表',
+                    'table-loading-overlay': '加载遮罩',
+                    'data-table-wrapper': '表格包装器',
+                    'user-select': '用户选择',
+                    'start-date': '开始日期',
+                    'end-date': '结束日期',
+                    'metrics': '指标区域'
+                };
                 
-                container.innerHTML += '</div>';
-            });
-            
-            container.innerHTML += '</div>';
+                const missingElements = [];
+                for (const [id, name] of Object.entries(requiredElements)) {
+                    if (!document.getElementById(id)) {
+                        missingElements.push(name);
+                    }
+                }
+                
+                if (missingElements.length > 0) {
+                    throw new Error(`缺少必要元素: ${missingElements.join(', ')}`);
+                }
+                
+                // 1. 加载用户列表
+                console.log('👥 加载用户列表...');
+                await loadUsers();
+                
+                // 2. 设置事件监听器
+                console.log('🎧 设置事件监听器...');
+                setupEventListeners();
+                setupAutoRefresh();
+                
+                // 3. 初始化表格状态
+                console.log('📊 初始化表格状态...');
+                tableState.page = 1;
+                tableState.pageSize = 20;
+                tableState.sortField = 'create_time';
+                tableState.sortOrder = 'DESC';
+                tableState.searchText = '';
+                
+                // 4. 加载初始数据
+                console.log('📈 开始加载数据...');
+                await updateData(true, '🎯 正在加载数据...', '首次加载，请稍候');
+                
+                console.log('🎉 页面初始化完成！');
+                
+            } catch (error) {
+                console.error('❌ 页面初始化失败:', error);
+                showInitializationError(error.message);
+            }
         }
         
-        // 更新分页控件
-        function updatePagination(pagination) {
-            const { total, page, pageSize, totalPages } = pagination;
-            let paginationHtml = '<div class="pagination">';
-            
-            // 上一页按钮
-            const prevDisabled = page <= 1 ? 'disabled' : '';
-            paginationHtml += '<button onclick="goToPage(' + (page - 1) + ')" ' + prevDisabled + '>⬅️ 上一页</button>';
-            
-            // 页码按钮
-            const startPage = Math.max(1, page - 2);
-            const endPage = Math.min(totalPages, page + 2);
-            
-            if (startPage > 1) {
-                paginationHtml += '<button onclick="goToPage(1)">1</button>';
-                if (startPage > 2) {
-                    paginationHtml += '<span style="color: #CBD5E1; padding: 0 0.5rem;">...</span>';
-                }
+        // 显示初始化错误
+        function showInitializationError(message) {
+            const dataTableElement = document.getElementById('data-table');
+            if (dataTableElement) {
+                dataTableElement.innerHTML = 
+                    '<div class="table-loading">' +
+                        '<div class="error-icon">⚠️</div>' +
+                        '<div class="table-loading-text">初始化失败</div>' +
+                        '<div class="table-loading-subtext">' + message + '</div>' +
+                        '<button onclick="location.reload()" class="reload-button">🔄 刷新页面</button>' +
+                    '</div>';
             }
-            
-            for (let i = startPage; i <= endPage; i++) {
-                const currentClass = i === page ? 'current-page' : '';
-                paginationHtml += '<button class="' + currentClass + '" onclick="goToPage(' + i + ')">' + i + '</button>';
-            }
-            
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    paginationHtml += '<span style="color: #CBD5E1; padding: 0 0.5rem;">...</span>';
-                }
-                paginationHtml += '<button onclick="goToPage(' + totalPages + ')">' + totalPages + '</button>';
-            }
-            
-            // 下一页按钮
-            const nextDisabled = page >= totalPages ? 'disabled' : '';
-            paginationHtml += '<button onclick="goToPage(' + (page + 1) + ')" ' + nextDisabled + '>下一页 ➡️</button>';
-            
-            paginationHtml += '</div>';
-            
-            // 分页信息
-            const start = (page - 1) * pageSize + 1;
-            const end = Math.min(page * pageSize, total);
-            paginationHtml += '<div class="pagination-info">显示第 ' + start + '-' + end + ' 条，共 ' + total + ' 条记录</div>';
-            
-            document.getElementById('pagination-controls').innerHTML = paginationHtml;
+            hideTableLoading();
         }
         
-        // 用户筛选功能
-        function handleUserChange() {
-            const userSelect = document.getElementById('user-select');
-            const selectedUser = userSelect.options[userSelect.selectedIndex].text;
-            const loadingText = selectedUser.includes('全部') ? '📊 切换到全部用户...' : '👤 筛选用户数据中...';
-            const loadingSubtext = selectedUser.includes('全部') ? '正在加载所有用户的数据' : '正在筛选 ' + selectedUser + ' 的数据';
+        // 内存清理函数
+        function cleanup() {
+            console.log('🧹 [CLEANUP] 清理资源');
             
-            updateData(true, loadingText, loadingSubtext);
+            // 清理定时器
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+                console.log('✅ [CLEANUP] 自动刷新定时器已清理');
+            }
+            
+            if (searchDebounceTimer) {
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = null;
+                console.log('✅ [CLEANUP] 搜索防抖定时器已清理');
+            }
+            
+            // 清理图表
+            if (funnelChart) {
+                funnelChart.destroy();
+                funnelChart = null;
+                console.log('✅ [CLEANUP] 漏斗图已清理');
+            }
+            
+            if (trendChart) {
+                trendChart.destroy();
+                trendChart = null;
+                console.log('✅ [CLEANUP] 趋势图已清理');
+            }
+        }
+        
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', cleanup);
+        
+        // DOM加载完成时统一初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePage);
+        } else {
+            // DOM已经加载完成，直接初始化  
+            initializePage();
         }
     </script>
 </body>
@@ -1743,23 +1991,23 @@ def index():
 def api_health():
     """健康检查API"""
     try:
-        connection = get_db_connection()
-        if connection:
-            cursor = connection.cursor()
-            cursor.execute("SELECT 1")
+        with get_db_cursor() as cursor:
+            if cursor is None:
+                return jsonify({
+                    'status': 'error',
+                    'database': 'connection_failed'
+                }), 500
+            
+            cursor.execute("SELECT 1 as test")
             result = cursor.fetchone()
-            connection.close()
             return jsonify({
                 'status': 'healthy',
                 'database': 'connected',
-                'test_query': 'success'
+                'test_query': 'success',
+                'result': result
             })
-        else:
-            return jsonify({
-                'status': 'error',
-                'database': 'connection_failed'
-            }), 500
     except Exception as e:
+        logger.error(f"健康检查失败: {e}")
         return jsonify({
             'status': 'error',
             'database': 'exception',
@@ -1791,26 +2039,25 @@ def api_debug():
     
     # 测试数据库连接
     try:
-        connection = get_db_connection()
-        if connection:
-            cursor = connection.cursor(pymysql.cursors.DictCursor)
-            cursor.execute("SELECT VERSION() as version")
-            version = cursor.fetchone()
-            cursor.execute("SELECT COUNT(*) as count FROM recruit_event")
-            count_result = cursor.fetchone()
-            connection.close()
-            
-            debug_info['database'] = {
-                'status': 'CONNECTED',
-                'version': version['version'] if version else 'UNKNOWN',
-                'recruit_event_count': count_result['count'] if count_result else 0
-            }
-        else:
-            debug_info['database'] = {
-                'status': 'CONNECTION_FAILED',
-                'error': 'get_db_connection() returned None'
-            }
+        with get_db_cursor() as cursor:
+            if cursor is None:
+                debug_info['database'] = {
+                    'status': 'CONNECTION_FAILED',
+                    'error': 'get_db_connection() returned None'
+                }
+            else:
+                cursor.execute("SELECT VERSION() as version")
+                version = cursor.fetchone()
+                cursor.execute("SELECT COUNT(*) as count FROM recruit_event")
+                count_result = cursor.fetchone()
+                
+                debug_info['database'] = {
+                    'status': 'CONNECTED',
+                    'version': version['version'] if version else 'UNKNOWN',
+                    'recruit_event_count': count_result['count'] if count_result else 0
+                }
     except Exception as e:
+        logger.error(f"调试API数据库测试失败: {e}")
         debug_info['database'] = {
             'status': 'ERROR',
             'error': str(e)
@@ -1857,10 +2104,9 @@ def api_debug():
 def api_users():
     """获取用户列表API"""
     try:
-        # 首先测试数据库连接
-        connection = get_db_connection()
-        if not connection:
-            print("数据库连接失败，返回测试用户列表")
+        users = get_user_list()
+        if not users or len(users) <= 1:  # 只有"全部用户"选项时返回测试数据
+            logger.warning("数据库中无用户数据，返回测试用户列表")
             return jsonify([
                 {'label': '全部用户', 'value': 'all'},
                 {'label': '用户-demo001 (4条)', 'value': 'demo001'},
@@ -1868,11 +2114,9 @@ def api_users():
                 {'label': '用户-demo003 (3条)', 'value': 'demo003'}
             ])
         
-        connection.close()
-        users = get_user_list()
         return jsonify(users)
     except Exception as e:
-        print(f"获取用户列表失败: {e}")
+        logger.error(f"获取用户列表失败: {e}")
         return jsonify([
             {'label': '全部用户', 'value': 'all'},
             {'label': '用户-demo001 (4条)', 'value': 'demo001'},
@@ -1885,86 +2129,78 @@ def api_users():
 def api_data():
     """获取主要数据API"""
     
-    # 临时修复：直接返回测试数据，确保界面正常工作
-    # 等数据库连接修复后可以移除这个快速修复
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    user_id = request.args.get('user_id', 'all')
+    # 验证和清理输入参数
+    start_date = validate_date(request.args.get('start_date'))
+    end_date = validate_date(request.args.get('end_date'))
+    user_id = validate_user_id(request.args.get('user_id', 'all'))
     
-    print(f"📊 快速修复：直接返回测试数据 - 日期范围: {start_date} 到 {end_date}, 用户: {user_id}")
+    # 获取分页参数
+    page, page_size = validate_page_params(
+        request.args.get('page', 1),
+        request.args.get('page_size', 20)
+    )
     
-    # 立即返回测试数据
-    return return_test_data(start_date, end_date, user_id)
+    # 排序参数验证
+    allowed_sort_fields = ['create_time', '日期', '用户名', '事件类型', '次数']
+    sort_field = request.args.get('sort_field', 'create_time')
+    if sort_field not in allowed_sort_fields:
+        sort_field = 'create_time'
     
-    # 以下是原来的数据库查询代码（临时注释）
-    """
+    sort_order = request.args.get('sort_order', 'DESC')
+    if sort_order.upper() not in ['ASC', 'DESC']:
+        sort_order = 'DESC'
+    
+    # 搜索文本清理
+    search_text = sanitize_search_text(request.args.get('search', ''))
+    
+    logger.info(f"API数据请求 - 日期: {start_date} 到 {end_date}, 用户: {user_id}, 页面: {page}/{page_size}")
+    
     try:
-        # 首先测试数据库连接
-        connection = get_db_connection()
-        if not connection:
-            print("数据库连接失败，返回测试数据")
+        # 获取漏斗数据
+        funnel_data = get_funnel_data(start_date, end_date, user_id) or []
+        
+        # 计算指标
+        metrics = calculate_metrics(funnel_data)
+        
+        # 生成图表
+        funnel_chart = create_funnel_chart(funnel_data)
+        
+        # 获取趋势数据
+        trend_data = get_trend_data(start_date, end_date, user_id) or []
+        trend_chart = create_trend_chart(trend_data)
+        
+        # 获取详细数据表
+        table_result = get_table_data(start_date, end_date, user_id, page, page_size, sort_field, sort_order, search_text)
+        
+        # 如果没有数据，返回测试数据
+        if not table_result or not table_result.get('data'):
+            logger.info("数据库中没有数据，返回测试数据")
             return return_test_data(start_date, end_date, user_id)
         
-        try:
-            connection.close()
-            
-            # 获取漏斗数据
-            funnel_data = get_funnel_data(start_date, end_date, user_id) or []
-            
-            # 计算指标
-            metrics = calculate_metrics(funnel_data)
-            
-            # 生成图表
-            funnel_chart = create_funnel_chart(funnel_data)
-            
-            # 获取趋势数据
-            trend_data = get_trend_data(start_date, end_date, user_id) or []
-            trend_chart = create_trend_chart(trend_data)
-            
-            # 获取分页参数
-            page = int(request.args.get('page', 1))
-            page_size = int(request.args.get('page_size', 20))
-            sort_field = request.args.get('sort_field', 'create_time')
-            sort_order = request.args.get('sort_order', 'DESC')
-            search_text = request.args.get('search', '')
-            
-            # 获取详细数据表
-            table_result = get_table_data(start_date, end_date, user_id, page, page_size, sort_field, sort_order, search_text)
-            
-            # 如果没有数据，返回测试数据
-            if not table_result or not table_result.get('data'):
-                print("数据库中没有数据，返回测试数据")
-                return return_test_data(start_date, end_date, user_id)
-            
-            return jsonify({
-                'metrics': metrics,
-                'funnel_chart': funnel_chart,
-                'trend_chart': trend_chart,
-                'table_data': table_result['data'],
-                'pagination': {
-                    'total': table_result['total'],
-                    'page': table_result['page'],
-                    'page_size': table_result['page_size'],
-                    'total_pages': table_result['total_pages']
-                },
-                'debug': {
-                    'data_source': 'database',
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'user_id': user_id,
-                    'funnel_count': len(funnel_data),
-                    'trend_count': len(trend_data),
-                    'table_count': len(table_result['data'])
-                }
-            })
-        except Exception as db_error:
-            print(f"数据库查询失败: {db_error}")
-            return return_test_data(start_date, end_date, user_id)
-            
+        return jsonify({
+            'metrics': metrics,
+            'funnel_chart': funnel_chart,
+            'trend_chart': trend_chart,
+            'table_data': table_result['data'],
+            'pagination': {
+                'total': table_result['total'],
+                'page': table_result['page'],
+                'page_size': table_result['page_size'],
+                'total_pages': table_result['total_pages']
+            },
+            'debug': {
+                'data_source': 'database',
+                'start_date': start_date,
+                'end_date': end_date,
+                'user_id': user_id,
+                'funnel_count': len(funnel_data),
+                'trend_count': len(trend_data),
+                'table_count': len(table_result['data'])
+            }
+        })
     except Exception as e:
-        print(f"API处理失败: {e}")
+        logger.error(f"API数据处理失败: {e}")
         return return_test_data(start_date, end_date, user_id)
-    """
 
 def return_test_data(start_date=None, end_date=None, user_id=None):
     """返回测试数据"""
@@ -2051,47 +2287,63 @@ def return_test_data(start_date=None, end_date=None, user_id=None):
 def api_export():
     """导出数据API"""
     try:
-        format_type = request.args.get('format', 'csv')
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        user_id = request.args.get('user_id', 'all')
+        # 验证导出格式
+        format_type = request.args.get('format', 'csv').lower()
+        if format_type not in ['csv', 'excel']:
+            return jsonify({'error': '不支持的导出格式，仅支持csv和excel'}), 400
+        
+        # 验证输入参数
+        start_date = validate_date(request.args.get('start_date'))
+        end_date = validate_date(request.args.get('end_date'))
+        user_id = validate_user_id(request.args.get('user_id', 'all'))
+        
+        logger.info(f"导出数据请求 - 格式: {format_type}, 日期: {start_date} 到 {end_date}, 用户: {user_id}")
         
         # 获取导出数据
         export_data = get_export_data(start_date, end_date, user_id)
         
+        if not export_data:
+            logger.warning("导出数据为空")
+            return jsonify({'error': '没有可导出的数据'}), 404
+        
         if format_type == 'csv':
             return export_csv(export_data)
-        else:
-            return jsonify({'error': '不支持的导出格式'}), 400
+        else:  # excel格式暂时返回CSV
+            return export_csv(export_data)
             
     except Exception as e:
-        print(f"导出数据失败: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"导出数据失败: {e}")
+        return jsonify({'error': '导出失败，请稍后重试'}), 500
 
 def get_table_data(start_date=None, end_date=None, user_id=None, page=1, page_size=20, sort_field='create_time', sort_order='DESC', search_text=''):
-    """获取数据表数据（支持分页、排序、搜索）"""
+    """获取数据表数据（支持分页、排序、搜索 - 使用参数化查询）"""
     where_conditions = []
+    params = []
     
     if start_date and end_date:
-        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+        where_conditions.append("create_time BETWEEN %s AND %s")
+        params.extend([start_date, end_date + ' 23:59:59'])
     
     if user_id and user_id != 'all':
-        where_conditions.append(f"uid = '{user_id}'")
+        where_conditions.append("uid = %s")
+        params.append(user_id)
     
-    # 搜索功能
+    # 搜索功能 - 使用参数化查询
     if search_text:
+        search_pattern = f"%{search_text}%"
         search_conditions = [
-            f"uid LIKE '%{search_text}%'",
-            f"event_type LIKE '%{search_text}%'",
-            f"DATE(create_time) LIKE '%{search_text}%'"
+            "uid LIKE %s",
+            "event_type LIKE %s",
+            "DATE(create_time) LIKE %s"
         ]
         where_conditions.append(f"({' OR '.join(search_conditions)})")
+        params.extend([search_pattern, search_pattern, search_pattern])
     
     where_clause = " AND ".join(where_conditions)
     if where_clause:
         where_clause = f"WHERE {where_clause}"
     
-    # 排序映射
+    # 排序映射 - 防止SQL注入
     sort_mapping = {
         '日期': 'DATE(create_time)',
         '用户名': 'uid', 
@@ -2103,7 +2355,9 @@ def get_table_data(start_date=None, end_date=None, user_id=None, page=1, page_si
     sort_column = sort_mapping.get(sort_field, 'create_time')
     sort_direction = 'ASC' if sort_order.upper() == 'ASC' else 'DESC'
     
-    # 计算偏移量
+    # 验证分页参数
+    page = max(1, int(page))
+    page_size = min(100, max(1, int(page_size)))  # 限制最大页面大小
     offset = (page - 1) * page_size
     
     # 获取总数
@@ -2112,10 +2366,10 @@ def get_table_data(start_date=None, end_date=None, user_id=None, page=1, page_si
     FROM recruit_event
     {where_clause}
     """
-    count_result = query_data(count_sql)
+    count_result = query_data(count_sql, params)
     total_count = count_result[0]['total'] if count_result else 0
     
-    # 获取分页数据
+    # 获取分页数据 - 使用参数化查询
     sql = f"""
     SELECT 
         id,
@@ -2136,10 +2390,12 @@ def get_table_data(start_date=None, end_date=None, user_id=None, page=1, page_si
     {where_clause}
     GROUP BY DATE(create_time), uid, event_type
     ORDER BY {sort_column} {sort_direction}
-    LIMIT {page_size} OFFSET {offset}
+    LIMIT %s OFFSET %s
     """
     
-    data = query_data(sql)
+    # 添加分页参数
+    data_params = params + [page_size, offset]
+    data = query_data(sql, data_params)
     
     return {
         'data': data,
@@ -2150,14 +2406,17 @@ def get_table_data(start_date=None, end_date=None, user_id=None, page=1, page_si
     }
 
 def get_export_data(start_date=None, end_date=None, user_id=None):
-    """获取导出数据"""
+    """获取导出数据（使用参数化查询）"""
     where_conditions = []
+    params = []
     
     if start_date and end_date:
-        where_conditions.append(f"re.create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+        where_conditions.append("re.create_time BETWEEN %s AND %s")
+        params.extend([start_date, end_date + ' 23:59:59'])
     
     if user_id and user_id != 'all':
-        where_conditions.append(f"re.uid = '{user_id}'")
+        where_conditions.append("re.uid = %s")
+        params.append(user_id)
     
     where_clause = " AND ".join(where_conditions)
     if where_clause:
@@ -2188,10 +2447,12 @@ def get_export_data(start_date=None, end_date=None, user_id=None):
     LEFT JOIN resume r ON re.resume_id = r.id
     {where_clause}
     ORDER BY re.create_time DESC
-    LIMIT 5000
+    LIMIT %s
     """
     
-    return query_data(sql)
+    # 使用配置中的最大导出记录数
+    params.append(Config.MAX_EXPORT_RECORDS)
+    return query_data(sql, params)
 
 def export_csv(data):
     """导出CSV格式数据"""
@@ -2251,5 +2512,38 @@ def favicon():
         mimetype='image/svg+xml'
     )
 
+@app.route('/.well-known/appspecific/com.chrome.devtools.json')
+def chrome_devtools_config():
+    """Chrome开发者工具配置文件 - 避免404错误"""
+    return jsonify({
+        "name": "智能招聘数据分析平台",
+        "description": "Chrome DevTools配置",
+        "version": "1.0.0"
+    })
+
+@app.route('/test')
+def test_page():
+    """测试页面 - 用于验证数据加载修复"""
+    try:
+        with open('test_page.html', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return '''
+        <h1>测试页面未找到</h1>
+        <p>请确保 test_page.html 文件存在</p>
+        <a href="/">返回主页</a>
+        ''', 404
+
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    # 启动前验证配置
+    config_issues = Config.validate_config()
+    if config_issues:
+        logger.warning("配置问题:")
+        for issue in config_issues:
+            logger.warning(f"  - {issue}")
+    
+    logger.info("启动智能招聘数据分析平台...")
+    logger.info(f"服务地址: http://0.0.0.0:8080")
+    logger.info(f"调试模式: {Config.APP_DEBUG}")
+    
+    app.run(debug=Config.APP_DEBUG, host='0.0.0.0', port=8080) 
