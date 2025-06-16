@@ -14,20 +14,25 @@ import pymysql
 # 创建Flask应用
 app = Flask(__name__)
 
-# 数据库连接配置
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'bj-cynosdbmysql-grp-5eypnf9y.sql.tencentcdb.com'),
-    'port': int(os.getenv('DB_PORT', 26606)),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', 'Gn123456'),
-    'database': os.getenv('DB_NAME', 'recruit-db'),
-    'charset': os.getenv('DB_CHARSET', 'utf8mb4')
-}
+# 数据库连接配置 - 使用统一配置管理
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import Config
+
+DB_CONFIG = Config.DB_CONFIG
 
 def get_db_connection():
     """获取数据库连接"""
     try:
-        return pymysql.connect(**DB_CONFIG)
+        # 添加连接参数优化
+        config = DB_CONFIG.copy()
+        config.update({
+            'connect_timeout': 10,
+            'read_timeout': 30,
+            'write_timeout': 30,
+            'autocommit': True
+        })
+        return pymysql.connect(**config)
     except Exception as e:
         print(f"数据库连接失败: {e}")
         return None

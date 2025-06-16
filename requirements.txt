@@ -1,13 +1,25 @@
-# 智能招聘数据分析平台 - 超极限优化版本
-# 目标：< 15MB 总大小
+# 智能招聘数据分析平台 - 依赖包列表
 
-# 最小Web框架
+# Web框架
 Flask==3.0.3
+dash==2.17.1
+dash-bootstrap-components==1.5.0
+
+# 数据处理
+pandas==2.1.4
+plotly==5.17.0
 
 # 数据库连接
 PyMySQL==1.1.1
 
-# 注意: 完全移除plotly依赖，改用纯JS Chart.js CDN
-# 注意: 移除python-dateutil，使用原生datetime
-# 
-# 预计总大小: < 15MB
+# 环境变量管理
+python-dotenv==1.0.0
+
+# 导出功能
+openpyxl==3.1.2
+
+# 日期处理
+python-dateutil==2.8.2
+
+# 缓存支持
+Flask-Caching==2.1.0
