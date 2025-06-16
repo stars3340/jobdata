@@ -1,14 +1,30 @@
-# 智能招聘数据分析平台 - Vercel 部署轻量级依赖
-# 专为 api/index.py (Flask版本) 优化
+# 智能招聘数据分析平台 - Render 部署依赖
+# 优化后的最小依赖包，支持 PostgreSQL
 
-# Web框架 (轻量级)
+# Web框架
 Flask==3.0.3
+dash==2.17.1
+dash-bootstrap-components==1.5.0
 
-# 数据库连接
+# 数据处理
+pandas==2.1.4
+plotly==5.17.0
+
+# 数据库连接 (PostgreSQL + MySQL兼容)
+psycopg2-binary==2.9.9
 PyMySQL==1.1.1
 
-# 环境变量管理  
+# 生产服务器
+gunicorn==22.0.0
+
+# 环境变量管理
 python-dotenv==1.0.0
 
-# 注意：本文件专为 Vercel 部署优化，移除了大型依赖包
-# 如需本地开发完整版本，请使用 requirements-full.txt
+# 导出功能
+openpyxl==3.1.2
+
+# 日期处理
+python-dateutil==2.8.2
+
+# 缓存支持
+Flask-Caching==2.1.0
