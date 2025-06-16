@@ -12,22 +12,24 @@ import io
 # 过滤警告
 warnings.filterwarnings('ignore')
 
-# 数据库连接配置 - 支持环境变量
+# 数据库连接配置 - 使用统一配置管理
 import os
+from config import Config
 
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'bj-cynosdbmysql-grp-5eypnf9y.sql.tencentcdb.com'),
-    'port': int(os.getenv('DB_PORT', 26606)),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', 'Gn123456'),
-    'database': os.getenv('DB_NAME', 'recruit-db'),
-    'charset': os.getenv('DB_CHARSET', 'utf8mb4')
-}
+DB_CONFIG = Config.DB_CONFIG
 
 def get_db_connection():
     """获取数据库连接"""
     try:
-        return pymysql.connect(**DB_CONFIG)
+        # 添加连接参数优化
+        config = DB_CONFIG.copy()
+        config.update({
+            'connect_timeout': 10,
+            'read_timeout': 30,
+            'write_timeout': 30,
+            'autocommit': True
+        })
+        return pymysql.connect(**config)
     except Exception as e:
         print(f"数据库连接失败: {e}")
         return None
@@ -776,7 +778,7 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                 
                 # 创建Excel文件
                 output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     df.to_excel(writer, sheet_name='招聘数据', index=False)
                 
                 output.seek(0)

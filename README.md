@@ -1,23 +1,28 @@
 # 🚀 智能招聘数据分析平台
 
-一个基于 Python Dash 构建的实时招聘数据分析仪表板，提供招聘漏斗分析、趋势监控和数据导出功能。
+一个基于 Python Dash 构建的全功能招聘数据分析仪表板，专为Vercel云平台优化，提供完整的招聘漏斗分析、趋势监控和数据导出功能。
 
 > 🔐 **安全声明**: 本项目代码和文档中所有的数据库连接信息、密码等均为示例值，不包含任何真实的敏感信息。部署时请使用您自己的数据库配置。
 
+> ⚡ **优化版本**: 为符合Vercel 250MB限制，本项目使用优化的依赖版本（Dash 2.17.1, pandas 2.0.3等），在保持完整功能的同时减少包体积。
+
 ## ✨ 功能特色
 
-- 📊 **实时数据分析** - 招聘漏斗、趋势图表、关键指标
+- 📊 **完整数据分析** - 招聘漏斗分析、趋势图表、关键指标监控
 - 🎯 **多维度筛选** - 按日期范围、用户维度进行数据筛选
-- 📈 **可视化图表** - 交互式漏斗图、趋势线图
+- 📈 **交互式图表** - 漏斗图、趋势线图、实时数据更新
 - 📤 **数据导出** - 支持 Excel 和 CSV 格式导出
-- 🔄 **自动刷新** - 可配置的自动数据刷新
+- 🔄 **自动刷新** - 可配置的自动数据刷新（30秒/1分钟/5分钟）
 - 📱 **响应式设计** - 适配桌面端、平板和移动端
+- ⚡ **云优化** - 专为Vercel平台优化的依赖版本
 
 ## 🛠️ 技术栈
 
-- **前端**: Dash + Plotly + Bootstrap CSS
-- **后端**: Python + Flask
+- **前端**: Dash + Plotly + 现代CSS
+- **后端**: Python Flask + Dash框架
+- **数据处理**: pandas (优化版本)
 - **数据库**: MySQL (通过 PyMySQL)
+- **导出功能**: openpyxl (轻量级Excel处理)
 - **部署**: Vercel 无服务器函数
 
 ## 🚀 快速部署到 Vercel
@@ -29,9 +34,17 @@
 git clone https://github.com/stars3340/jobdata.git
 cd jobdata
 
-# 安装依赖
+# 根据需要选择依赖版本：
+# Vercel 部署（轻量级）
 pip install -r requirements.txt
+
+# 本地开发（完整功能）
+pip install -r requirements-full.txt
 ```
+
+💡 **依赖说明**：
+- `requirements.txt` - Vercel 部署专用（轻量级，< 250MB）
+- `requirements-full.txt` - 完整功能版本，包含 Dash + Plotly
 
 ### 2. 环境配置
 
@@ -107,19 +120,29 @@ recruitment-dashboard/
 
 ## 🏃‍♂️ 本地开发
 
+### 完整功能版本（推荐）
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 安装完整依赖（包含 Dash + Plotly）
+pip install -r requirements-full.txt
 
 # 配置环境变量
 cp env.example .env
 # 编辑 .env 文件
 
-# 启动开发服务器
+# 启动 Dash 版本（完整功能）
 python app.py
 ```
 
-访问 `http://localhost:8050` 查看应用。
+### 轻量级版本
+```bash
+# 安装轻量级依赖（仅 Flask）
+pip install -r requirements.txt
+
+# 启动 Flask 版本（轻量级）
+python api/index.py
+```
+
+访问 `http://localhost:8050` (Dash版本) 或 `http://localhost:5000` (Flask版本) 查看应用。
 
 ## 📊 数据库要求
 

@@ -1,17 +1,14 @@
-# 智能招聘数据分析平台 - 生产环境依赖
-# Core packages
-dash==3.0.4
-dash-bootstrap-components==2.0.3
-dash-table==5.0.0
+# 智能招聘数据分析平台 - Vercel 部署轻量级依赖
+# 专为 api/index.py (Flask版本) 优化
+
+# Web框架 (轻量级)
 Flask==3.0.3
-plotly==6.1.2
-pandas==2.3.0
+
+# 数据库连接
 PyMySQL==1.1.1
-XlsxWriter==3.2.3
-python-dateutil==2.9.0.post0
 
-# Production server
-gunicorn==22.0.0
-
-# Environment management
+# 环境变量管理  
 python-dotenv==1.0.0
+
+# 注意：本文件专为 Vercel 部署优化，移除了大型依赖包
+# 如需本地开发完整版本，请使用 requirements-full.txt
