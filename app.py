@@ -73,11 +73,13 @@ def create_app():
     return app
 
 # 创建应用实例
-application = create_app()
+dash_app = create_app()
+# gunicorn 需要 WSGI 应用对象（Flask 服务器）
+application = dash_app.server
 
 if __name__ == '__main__':
     # 注意: Dash 2.17.1 及以上版本使用 app.run
-    app.run(
+    dash_app.run(
         host=Config.APP_HOST,
         port=Config.APP_PORT,
         debug=Config.APP_DEBUG
