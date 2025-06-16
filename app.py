@@ -76,7 +76,8 @@ def create_app():
 application = create_app()
 
 if __name__ == '__main__':
-    application.run_server(
+    # 注意: Dash 2.17.1 及以上版本使用 app.run
+    app.run(
         host=Config.APP_HOST,
         port=Config.APP_PORT,
         debug=Config.APP_DEBUG
