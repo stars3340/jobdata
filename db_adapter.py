@@ -72,10 +72,8 @@ def get_db_connection():
             return connection
             
         elif db_type == 'postgresql':
-            import psycopg2
-            connection = psycopg2.connect(**params)
-            logger.info("PostgreSQL 数据库连接成功")
-            return connection
+            logger.error("PostgreSQL 支持已移除，请使用 MySQL 数据库")
+            raise ValueError("PostgreSQL 支持已移除，请设置 DB_TYPE=mysql")
             
         elif db_type == 'sqlite':
             import sqlite3

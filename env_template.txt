@@ -1,0 +1,53 @@
+# 🎨 智能招聘数据分析平台 - 环境变量配置模板
+# 部署时将以下变量添加到环境变量中
+
+# ============ 腾讯云 MySQL 数据库配置 ============
+# 🔒 注意：只读权限，禁止增删改操作！
+# ⚠️ 重要：必须设置为 mysql（已移除PostgreSQL支持）
+DB_TYPE=mysql
+DB_HOST=bj-cynosdbmysql-grp-5eypnf9y.sql.tencentcdb.com
+DB_PORT=26606
+DB_USER=root
+DB_PASSWORD=Gn123456
+DB_NAME=recruit-db
+DB_CHARSET=utf8mb4
+
+# ============ 应用配置 ============
+APP_NAME=智能招聘数据分析平台
+APP_HOST=0.0.0.0
+APP_PORT=8050
+APP_DEBUG=False
+
+# ============ 安全配置 ============
+# 生产环境请更换为复杂的密钥
+SECRET_KEY=gVNzFUEw6JG3UjgXsDQIP8EOhw2VYc8CxhhPIk41VT8
+
+# ============ 日志配置 ============
+LOG_LEVEL=INFO
+LOG_FILE=logs/app.log
+
+# ============ 缓存配置 ============
+CACHE_TYPE=simple
+CACHE_DEFAULT_TIMEOUT=300
+
+# ============ 部署说明 ============
+# 1. 本地开发：创建 .env 文件并复制以上内容
+# 2. Render部署：在服务设置的Environment标签中逐一添加以上变量
+# 3. 其他平台：根据平台要求设置环境变量
+
+# ============ 安全提醒 ============
+# ⚠️  重要：数据库为只读模式，严禁增删改操作
+# 🔒 保护：应用已集成只读验证器，自动阻止写入操作
+# 📊 功能：专注数据展示分析，确保数据安全
+
+# ============ Render 部署步骤 ============
+# 1. 访问 https://render.com/ 并登录
+# 2. 创建 Web Service，连接此 GitHub 仓库
+# 3. 配置构建和启动命令：
+#    Build Command: pip install -r requirements.txt
+#    Start Command: gunicorn --bind 0.0.0.0:$PORT app:application
+# 4. 在 Environment 标签中添加以上环境变量
+# 5. 点击 "Create Web Service" 开始部署
+
+# 🎉 部署完成后，您的数据分析平台将可通过以下地址访问：
+# https://your-service-name.onrender.com 

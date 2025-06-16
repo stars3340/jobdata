@@ -13,13 +13,13 @@ class Config:
     APP_PORT = int(os.getenv('APP_PORT', 8050))
     APP_DEBUG = os.getenv('APP_DEBUG', 'False').lower() == 'true'
     
-    # 数据库配置
+    # 数据库配置（腾讯云 MySQL - 只读模式）
     DB_CONFIG = {
-        'host': os.getenv('DB_HOST', 'localhost'),
-        'port': int(os.getenv('DB_PORT', 3306)),
+        'host': os.getenv('DB_HOST', 'bj-cynosdbmysql-grp-5eypnf9y.sql.tencentcdb.com'),
+        'port': int(os.getenv('DB_PORT', 26606)),
         'user': os.getenv('DB_USER', 'root'),
-        'password': os.getenv('DB_PASSWORD', ''),
-        'database': os.getenv('DB_NAME', 'recruit_db'),
+        'password': os.getenv('DB_PASSWORD', 'Gn123456'),
+        'database': os.getenv('DB_NAME', 'recruit-db'),
         'charset': os.getenv('DB_CHARSET', 'utf8mb4')
     }
     
