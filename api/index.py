@@ -769,7 +769,8 @@ HTML_TEMPLATE = '''
         <div class="refresh-section">
             <span id="last-update" class="last-update">数据加载中...</span>
             <button class="btn" onclick="testDebugData()" style="margin-right: 1rem;">🧪 测试数据</button>
-            <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
+                            <button class="btn" onclick="refreshData()">🔄 刷新数据</button>
+                <button class="btn" onclick="testDebugData()" style="background: #FFD166; margin-left: 10px;">🧪 测试数据</button>
         </div>
     </header>
     
@@ -1621,8 +1622,8 @@ def api_debug():
     try:
         connection = get_db_connection()
         if connection:
-            cursor = connection.cursor()
-            cursor.execute("SELECT VERSION()")
+            cursor = connection.cursor(pymysql.cursors.DictCursor)
+            cursor.execute("SELECT VERSION() as version")
             version = cursor.fetchone()
             cursor.execute("SELECT COUNT(*) as count FROM recruit_event")
             count_result = cursor.fetchone()
@@ -1630,7 +1631,7 @@ def api_debug():
             
             debug_info['database'] = {
                 'status': 'CONNECTED',
-                'version': str(version) if version else 'UNKNOWN',
+                'version': version['version'] if version else 'UNKNOWN',
                 'recruit_event_count': count_result['count'] if count_result else 0
             }
         else:
