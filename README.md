@@ -34,9 +34,17 @@
 git clone https://github.com/stars3340/jobdata.git
 cd jobdata
 
-# 安装依赖
+# 根据需要选择依赖版本：
+# Vercel 部署（轻量级）
 pip install -r requirements.txt
+
+# 本地开发（完整功能）
+pip install -r requirements-full.txt
 ```
+
+💡 **依赖说明**：
+- `requirements.txt` - Vercel 部署专用（轻量级，< 250MB）
+- `requirements-full.txt` - 完整功能版本，包含 Dash + Plotly
 
 ### 2. 环境配置
 
@@ -112,19 +120,29 @@ recruitment-dashboard/
 
 ## 🏃‍♂️ 本地开发
 
+### 完整功能版本（推荐）
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 安装完整依赖（包含 Dash + Plotly）
+pip install -r requirements-full.txt
 
 # 配置环境变量
 cp env.example .env
 # 编辑 .env 文件
 
-# 启动开发服务器
+# 启动 Dash 版本（完整功能）
 python app.py
 ```
 
-访问 `http://localhost:8050` 查看应用。
+### 轻量级版本
+```bash
+# 安装轻量级依赖（仅 Flask）
+pip install -r requirements.txt
+
+# 启动 Flask 版本（轻量级）
+python api/index.py
+```
+
+访问 `http://localhost:8050` (Dash版本) 或 `http://localhost:5000` (Flask版本) 查看应用。
 
 ## 📊 数据库要求
 
