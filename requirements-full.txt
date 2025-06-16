@@ -12,6 +12,7 @@ plotly==5.17.0
 
 # 数据库连接
 PyMySQL==1.1.1
+psycopg2-binary==2.9.9
 
 # 环境变量管理
 python-dotenv==1.0.0

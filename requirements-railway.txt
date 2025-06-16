@@ -1,0 +1,35 @@
+# 智能招聘数据分析平台 - Railway 部署依赖
+# 用于 Railway PostgreSQL + Dash 完整版部署
+
+# Web框架
+Flask==3.0.3
+dash==2.17.1
+dash-bootstrap-components==1.5.0
+
+# 数据处理
+pandas==2.1.4
+plotly==5.17.0
+
+# 数据库连接 (支持多种数据库)
+PyMySQL==1.1.1
+psycopg2-binary==2.9.9
+
+# 生产服务器
+gunicorn==22.0.0
+
+# 环境变量管理
+python-dotenv==1.0.0
+
+# 导出功能
+openpyxl==3.1.2
+
+# 日期处理
+python-dateutil==2.8.2
+
+# 缓存支持
+Flask-Caching==2.1.0
+
+# Railway 部署说明：
+# 1. Railway 会自动检测并安装此文件中的依赖
+# 2. 使用内置的 PostgreSQL 数据库
+# 3. 支持 MySQL 和 PostgreSQL 双数据库 
