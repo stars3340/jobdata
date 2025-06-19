@@ -234,8 +234,8 @@ def get_key_metrics(start_date=None, end_date=None, user_id=None):
         'resume_screening_rate': resume_screening_rate            # 简历过筛率
     }
 
-def create_metric_card(title, value, change=None, format_type='number', icon=None):
-    """创建指标卡片"""
+def create_metric_card(title, value, change=None, format_type='number', icon=None, calculation_formula=None):
+    """创建指标卡片，包含计算方式说明"""
     # 根据格式类型处理数值显示
     if format_type == 'percentage':
         display_value = f"{value:.1f}%"
@@ -254,10 +254,28 @@ def create_metric_card(title, value, change=None, format_type='number', icon=Non
             className=f"kpi-change {change_class}"
         )
     
+    # 计算方式说明
+    formula_element = html.Div()
+    if calculation_formula:
+        formula_element = html.Div(
+            calculation_formula,
+            className="kpi-formula",
+            style={
+                'fontSize': '0.75rem',
+                'color': '#CBD5E1',
+                'marginTop': '0.5rem',
+                'padding': '0.5rem',
+                'backgroundColor': 'rgba(255,255,255,0.05)',
+                'borderRadius': '4px',
+                'border': '1px solid rgba(255,255,255,0.1)'
+            }
+        )
+    
     return html.Div([
         html.H3(title),
         html.Div(display_value, className="kpi-value"),
-        change_element
+        change_element,
+        formula_element
     ], className="card kpi-card")
 
 def create_funnel_chart(funnel_df):
@@ -446,6 +464,150 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None):
     
     return df
 
+def get_greeting_success_trend(start_date=None, end_date=None, user_id=None):
+    """获取打招呼成功率趋势数据"""
+    where_conditions = []
+    
+    if start_date and end_date:
+        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+    
+    if user_id and user_id != 'all':
+        where_conditions.append(f"uid = '{user_id}'")
+    
+    where_clause = " AND ".join(where_conditions)
+    if where_clause:
+        where_clause = f"WHERE {where_clause}"
+    
+    sql = f"""
+    SELECT 
+        DATE(create_time) as date,
+        event_type,
+        COUNT(*) as count
+    FROM recruit_event 
+    {where_clause}
+    GROUP BY DATE(create_time), event_type
+    ORDER BY date ASC
+    """
+    
+    df = query_data(sql)
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    # 透视数据
+    pivot_df = df.pivot_table(
+        index='date', 
+        columns='event_type', 
+        values='count', 
+        fill_value=0
+    ).reset_index()
+    
+    # 计算每日打招呼成功率
+    success_rate_data = []
+    for _, row in pivot_df.iterrows():
+        greetings = row.get('2', 0)  # 打招呼
+        connections = row.get('13', 0)  # 建联量
+        
+        success_rate = (connections / greetings * 100) if greetings > 0 else 0
+        success_rate_data.append({
+            'date': row['date'],
+            'greeting_success_rate': success_rate,
+            'greetings': greetings,
+            'connections': connections
+        })
+    
+    return pd.DataFrame(success_rate_data)
+
+def create_greeting_success_trend_chart(trend_df):
+    """创建打招呼成功率趋势图"""
+    # 创建图表，强制设置Y轴范围
+    fig = go.Figure()
+    
+    # 添加一个隐藏的空数据点来强制Y轴范围
+    fig.add_trace(go.Scatter(
+        x=[],
+        y=[0, 5],  # 强制Y轴从0到5
+        mode='markers',
+        marker=dict(opacity=0),  # 完全透明
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    if trend_df.empty:
+        # 暂无数据时显示提示
+        fig.add_annotation(
+            text="暂无数据",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color=colors['text'])
+        )
+    else:
+        # 添加成功率线条
+        fig.add_trace(go.Scatter(
+            x=trend_df['date'],
+            y=trend_df['greeting_success_rate'],
+            mode='lines+markers',
+            name='打招呼成功率',
+            line=dict(color=colors['success'], width=3),
+            marker=dict(size=8, line=dict(width=2, color='white')),
+            hovertemplate='<b>打招呼成功率</b><br>日期: %{x}<br>成功率: %{y:.1f}%<br>打招呼: %{customdata[0]}<br>建联: %{customdata[1]}<extra></extra>',
+            customdata=list(zip(trend_df['greetings'], trend_df['connections']))
+        ))
+    
+    # 强制布局设置
+    fig.update_layout(
+        title=dict(
+            text="<b>打招呼成功率趋势分析</b>",
+            font=dict(size=20, color=colors['text']),
+            x=0.5
+        ),
+        xaxis=dict(
+            title=dict(text="日期", font=dict(color=colors['text'])),
+            tickfont=dict(color=colors['text']),
+            gridcolor='rgba(255,255,255,0.1)'
+        ),
+        yaxis=dict(
+            title=dict(text="成功率 (%)", font=dict(color=colors['text'])),
+            tickfont=dict(color=colors['text']),
+            gridcolor='rgba(255,255,255,0.1)',
+            range=[0, 5],
+            fixedrange=True,
+            autorange=False,
+            tickformat='.1f',
+            dtick=1,  # 每1%一个刻度
+            tick0=0,  # 从0开始
+            constrain='domain'
+        ),
+        legend=dict(
+            font=dict(color=colors['text']),
+            bgcolor='rgba(35, 41, 70, 0.8)',
+            bordercolor=colors['primary'],
+            borderwidth=1
+        ),
+        font=dict(color=colors['text']),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(t=80, b=60, l=60, r=40),
+        hovermode='x unified',
+        autosize=True
+    )
+    
+    # 多重强制设置Y轴
+    fig.update_yaxes(
+        range=[0, 5],
+        autorange=False, 
+        fixedrange=True,
+        constrain='domain',
+        dtick=1,
+        tick0=0
+    )
+    
+    # 最后一道保险：直接修改layout
+    fig.layout.yaxis.range = [0, 5]
+    fig.layout.yaxis.autorange = False
+    
+    return fig
+
 # 应用布局
 app.layout = html.Div([
     # 隐藏的存储组件用于状态管理
@@ -482,19 +644,11 @@ app.layout = html.Div([
                     start_date=date.today() - timedelta(days=30),
                     end_date=date.today(),
                     display_format='YYYY-MM-DD',
-                    style={'width': '100%'}
+                    style={'width': '100%'},
+                    start_date_placeholder_text="开始日期",
+                    end_date_placeholder_text="结束日期",
+                    clearable=True
                 )
-            ], className="control-group"),
-            
-            html.Div([
-                html.Label("⚡ 快速筛选"),
-                html.Div(id="quick-filters", children=[
-                    html.Button("今天", id="btn-today", className="quick-filter-btn"),
-                    html.Button("昨天", id="btn-yesterday", className="quick-filter-btn"),
-                    html.Button("最近7天", id="btn-7days", className="quick-filter-btn active"),
-                    html.Button("最近30天", id="btn-30days", className="quick-filter-btn"),
-                    html.Button("本月", id="btn-month", className="quick-filter-btn")
-                ], className="quick-filters")
             ], className="control-group"),
             
             html.Div([
@@ -545,13 +699,24 @@ app.layout = html.Div([
             html.Div([
                 html.Div([
                     html.Div([
-                        html.H2("📈 趋势分析", className="card-title"),
+                        html.H2("📈 每日活动趋势", className="card-title"),
                         html.Div(id="trend-loading", children=create_loading_component())
                     ], className="card-header"),
                     dcc.Graph(id="trend-chart", style={'display': 'none'})
                 ], className="card")
             ], style={'gridColumn': '2'})
         ], className="content-grid"),
+        
+        # 新增打招呼成功率趋势图
+        html.Div([
+            html.Div([
+                html.Div([
+                    html.H2("📈 打招呼成功率趋势分析", className="card-title"),
+                    html.Div(id="success-trend-loading", children=create_loading_component())
+                ], className="card-header"),
+                dcc.Graph(id="success-trend-chart", style={'display': 'none'})
+            ], className="card")
+        ], style={'marginBottom': '2.5rem'}),
         
         # 详细数据表格
         html.Div([
@@ -582,58 +747,7 @@ app.layout = html.Div([
     dcc.Download(id="download-csv")
 ], className="dashboard-container")
 
-# 回调函数：快速日期筛选
-@app.callback(
-    [Output('date-picker-range', 'start_date'),
-     Output('date-picker-range', 'end_date'),
-     Output('btn-today', 'className'),
-     Output('btn-yesterday', 'className'),
-     Output('btn-7days', 'className'),
-     Output('btn-30days', 'className'),
-     Output('btn-month', 'className')],
-    [Input('btn-today', 'n_clicks'),
-     Input('btn-yesterday', 'n_clicks'),
-     Input('btn-7days', 'n_clicks'),
-     Input('btn-30days', 'n_clicks'),
-     Input('btn-month', 'n_clicks')]
-)
-def update_date_range(*args):
-    ctx = callback_context
-    
-    if not ctx.triggered:
-        return dash.no_update
-    
-    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    
-    today = date.today()
-    base_class = "quick-filter-btn"
-    active_class = "quick-filter-btn active"
-    
-    classes = [base_class] * 5
-    
-    if button_id == 'btn-today':
-        start_date, end_date = today, today
-        classes[0] = active_class
-    elif button_id == 'btn-yesterday':
-        yesterday = today - timedelta(days=1)
-        start_date, end_date = yesterday, yesterday
-        classes[1] = active_class
-    elif button_id == 'btn-7days':
-        start_date = today - timedelta(days=7)
-        end_date = today
-        classes[2] = active_class
-    elif button_id == 'btn-30days':
-        start_date = today - timedelta(days=30)
-        end_date = today
-        classes[3] = active_class
-    elif button_id == 'btn-month':
-        start_date = today.replace(day=1)
-        end_date = today
-        classes[4] = active_class
-    else:
-        return dash.no_update
-    
-    return start_date, end_date, *classes
+# 快速筛选回调已删除
 
 # 回调函数：自动刷新设置
 @app.callback(
@@ -656,6 +770,9 @@ def update_auto_refresh(interval_value):
      Output('trend-chart', 'figure'),
      Output('trend-chart', 'style'),
      Output('trend-loading', 'style'),
+     Output('success-trend-chart', 'figure'),
+     Output('success-trend-chart', 'style'),
+     Output('success-trend-loading', 'style'),
      Output('data-table-container', 'children'),
      Output('data-table-container', 'style'),
      Output('data-table-loading', 'style'),
@@ -677,23 +794,29 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         metrics = get_key_metrics(start_date, end_date, user_id)
         funnel_df = get_funnel_data(start_date, end_date, user_id)
         trend_df = get_trend_data(start_date, end_date, user_id)
+        success_trend_df = get_greeting_success_trend(start_date, end_date, user_id)
         detailed_df = get_detailed_data(start_date, end_date, user_id)
         
-        # 创建KPI卡片
+        # 创建KPI卡片（包含计算方式）
         kpi_cards = [
             create_metric_card("📊 浏览简历", metrics['browse_resumes'], None, 'number'),
             create_metric_card("✅ 打招呼", metrics['greetings'], None, 'number'),
             create_metric_card("💬 相互沟通", metrics['mutual_communications'], None, 'number'),
             create_metric_card("🤝 建联量", metrics['connections'], None, 'number'),
-            create_metric_card("📈 打招呼成功率", metrics['greeting_success_rate'], None, 'percentage'),
-            create_metric_card("🎯 沟通成功率", metrics['communication_success_rate'], None, 'percentage'),
-            create_metric_card("💡 相互沟通率", metrics['mutual_communication_rate'], None, 'percentage'),
-            create_metric_card("📋 简历过筛率", metrics['resume_screening_rate'], None, 'percentage')
+            create_metric_card("📈 打招呼成功率", metrics['greeting_success_rate'], None, 'percentage', 
+                             None, "计算方式：建联量 ÷ 打招呼数 × 100%"),
+            create_metric_card("🎯 沟通成功率", metrics['communication_success_rate'], None, 'percentage', 
+                             None, "计算方式：建联量 ÷ 相互沟通数 × 100%"),
+            create_metric_card("💡 相互沟通率", metrics['mutual_communication_rate'], None, 'percentage', 
+                             None, "计算方式：相互沟通数 ÷ 打招呼数 × 100%"),
+            create_metric_card("📋 简历过筛率", metrics['resume_screening_rate'], None, 'percentage', 
+                             None, "计算方式：打招呼数 ÷ 浏览简历数 × 100%")
         ]
         
         # 创建图表
         funnel_chart = create_funnel_chart(funnel_df)
         trend_chart = create_trend_chart(trend_df)
+        success_trend_chart = create_greeting_success_trend_chart(success_trend_df)
         
         # 创建数据表格
         if not detailed_df.empty:
@@ -739,6 +862,7 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
             kpi_cards,
             funnel_chart, {'display': 'block'}, hidden_style,
             trend_chart, {'display': 'block'}, hidden_style,
+            success_trend_chart, {'display': 'block'}, hidden_style,
             data_table, {'display': 'block'}, hidden_style,
             update_time,
             time.time()
@@ -754,6 +878,7 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         
         return (
             [error_msg],
+            {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
             error_msg, hidden_style, hidden_style,

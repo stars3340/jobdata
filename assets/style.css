@@ -141,62 +141,6 @@ body {
     margin-bottom: 0.25rem;
 }
 
-/* 精致的快速筛选按钮 */
-.quick-filters {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.quick-filter-btn {
-    padding: 0.75rem 1.25rem;
-    background: var(--background-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    font-size: 0.875rem;
-    font-weight: 500;
-    position: relative;
-    overflow: hidden;
-}
-
-.quick-filter-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: var(--gradient-primary);
-    transition: left 0.3s ease;
-    z-index: -1;
-}
-
-.quick-filter-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(6, 214, 160, 0.2);
-    border-color: var(--border-accent);
-    color: var(--text-primary);
-}
-
-.quick-filter-btn:hover::before {
-    left: 0;
-}
-
-.quick-filter-btn.active {
-    background: var(--gradient-primary);
-    color: var(--background-primary);
-    border-color: var(--border-accent);
-    box-shadow: 0 4px 15px var(--shadow-color);
-    font-weight: 600;
-}
-
-.quick-filter-btn:active {
-    transform: translateY(0);
-}
-
 /* 主要内容区域 */
 .main-content {
     flex: 1;
@@ -418,7 +362,7 @@ body {
     color: var(--text-primary) !important;
 }
 
-/* 改进的表单控件 */
+/* 改进的表单控件 - 修复日期选择器 */
 .DateInput_input {
     background: var(--background-tertiary) !important;
     color: var(--text-primary) !important;
@@ -427,17 +371,182 @@ body {
     padding: 0.75rem !important;
     transition: all 0.3s ease !important;
     font-size: 0.875rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .DateInput_input:focus {
     border-color: var(--border-accent) !important;
     box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1) !important;
+    outline: none !important;
+}
+
+.DateInput_input::placeholder {
+    color: var(--text-muted) !important;
 }
 
 .DateRangePickerInput {
     background: var(--background-tertiary) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
+.DateRangePickerInput__withBorder {
+    border-color: var(--border-color) !important;
+}
+
+.DateRangePickerInput__arrow {
+    color: var(--text-muted) !important;
+}
+
+.DateInput {
+    background: transparent !important;
+    width: 100% !important;
+}
+
+.DateInput_display_text {
+    color: var(--text-primary) !important;
+    background: transparent !important;
+}
+
+/* 日期选择器样式 - 使用深色文字浅色背景 */
+
+/* 日期选择器容器基础样式 */
+.DayPicker {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+    z-index: 1000 !important;
+}
+
+/* 月份标题 */
+.CalendarMonth_caption {
+    background: #F9FAFB !important;
+    color: #111827 !important;
+    font-weight: 600 !important;
+    padding: 1rem !important;
+    border-bottom: 1px solid #E5E7EB !important;
+}
+
+/* 星期标题行 */
+.DayPicker_weekHeader_li {
+    color: #6B7280 !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    padding: 0.5rem !important;
+}
+
+/* 日期单元格基础样式 */
+.CalendarDay__default {
+    background: #FFFFFF !important;
+    color: #374151 !important;
+    border: 1px solid transparent !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+/* 日期单元格悬停效果 */
+.CalendarDay__default:hover {
+    background: #F3F4F6 !important;
+    border-color: #06D6A0 !important;
+    color: #111827 !important;
+}
+
+/* 今天的日期 */
+.CalendarDay__today {
+    background: #ECFDF5 !important;
+    color: #065F46 !important;
+    font-weight: 700 !important;
+    border: 1px solid #06D6A0 !important;
+}
+
+/* 选中的日期 */
+.CalendarDay__selected {
+    background: #06D6A0 !important;
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+    border: 1px solid #06D6A0 !important;
+}
+
+.CalendarDay__selected:hover {
+    background: #05C08A !important;
+    color: #FFFFFF !important;
+}
+
+/* 选中范围内的日期 */
+.CalendarDay__selected_span {
+    background: #D1FAE5 !important;
+    color: #065F46 !important;
+    border: 1px solid #A7F3D0 !important;
+}
+
+/* 悬停选择范围 */
+.CalendarDay__hovered_span {
+    background: #ECFDF5 !important;
+    color: #065F46 !important;
+    border: 1px solid #BBF7D0 !important;
+}
+
+/* 被阻止或超出范围的日期 */
+.CalendarDay__blocked_out_of_range {
+    background: #FFFFFF !important;
+    color: #D1D5DB !important;
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+}
+
+.CalendarDay__blocked_calendar {
+    background: #FFFFFF !important;
+    color: #D1D5DB !important;
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+}
+
+/* 其他月份的日期 */
+.CalendarDay__outside {
+    color: #9CA3AF !important;
+    opacity: 0.7 !important;
+}
+
+/* 导航按钮样式 */
+.DayPickerNavigation_button__default {
+    background: #F9FAFB !important;
+    border: 1px solid #E5E7EB !important;
+    color: #374151 !important;
+    border-radius: 4px !important;
+    padding: 0.5rem !important;
+    transition: all 0.2s ease !important;
+}
+
+.DayPickerNavigation_button__default:hover {
+    background: #F3F4F6 !important;
+    border-color: #06D6A0 !important;
+    color: #065F46 !important;
+}
+
+/* 导航按钮禁用状态 */
+.DayPickerNavigation_button__default:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    color: #D1D5DB !important;
+}
+
+/* 月份表格样式 */
+.CalendarMonth_table {
+    background: #FFFFFF !important;
+    border-collapse: separate !important;
+    border-spacing: 2px !important;
+}
+
+/* 键盘导航焦点 */
+.CalendarDay__keyboard_selected {
+    background: #F3F4F6 !important;
+    color: #111827 !important;
+    border: 2px solid #06D6A0 !important;
 }
 
 /* 下拉菜单样式 */
@@ -497,8 +606,13 @@ body {
     padding: 0.5rem 0.75rem !important;
 }
 
-/* 强制所有文字为白色 */
-* {
+/* 移除过于强制的全局文字颜色，改为更精确的选择器 */
+
+/* 确保主要界面元素有正确的文字颜色 */
+body, .dashboard-container, .main-content, .control-panel, 
+.dashboard-header, .card, .kpi-card, h1, h2, h3, h4, h5, h6, 
+p, span, div:not(.DayPicker):not(.DayPicker *), 
+label, button:not(.DayPickerNavigation_button) {
     color: var(--text-primary) !important;
 }
 
@@ -514,25 +628,24 @@ body {
     background: var(--gradient-primary) !important;
 }
 
-.quick-filter-btn.active {
-    color: var(--background-primary) !important;
-}
-
 .btn {
     color: var(--background-primary) !important;
 }
 
 /* 确保下拉菜单文字可见 */
-.Select-control, .Select-placeholder, .Select-value {
-    color: var(--text-primary) !important;
-}
-
-.DateInput_input, .DateInput_input::placeholder {
+.Select-control, .Select-placeholder, .Select-value,
+.Select-control *, .Select-menu-outer *, .Select-option * {
     color: var(--text-primary) !important;
 }
 
 /* 时间选择器文字 */
 .DateRangePickerInput_arrow, .DateInput_display_text {
+    color: var(--text-primary) !important;
+}
+
+/* 确保表格内容可见 */
+.dash-table-container, .dash-table-container *,
+.dash-spreadsheet-container, .dash-spreadsheet-container * {
     color: var(--text-primary) !important;
 }
 
@@ -618,11 +731,7 @@ body {
         grid-template-columns: 1fr;
     }
     
-    .quick-filters {
-        justify-content: center;
-    }
-    
     .logo-section h1 {
         font-size: 1.5rem;
     }
-} 
+}
