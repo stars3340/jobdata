@@ -98,18 +98,18 @@ def get_funnel_data(start_date=None, end_date=None, user_id=None):
     
     # 事件类型映射（数字到中文）- 根据Prisma schema修正
     event_type_mapping = {
-        '1': '查看简历',        # VIEW_RESUME
-        '2': '简历通过筛选',     # SCREEN_PASS  
-        '12': 'Boss上聊天',     # BOSS_CHAT
-        '13': '交换联系方式'     # PHONE_NUMBER
+        '1': '浏览简历',        # VIEW_RESUME
+        '2': '打招呼',         # SCREEN_PASS  
+        '12': '相互沟通',       # BOSS_CHAT
+        '13': '建联量'          # PHONE_NUMBER
     }
     
     # 重新定义漏斗顺序
     funnel_mapping = {
-        '查看简历': ('查看简历', 1),
-        '简历通过筛选': ('简历通过筛选', 2), 
-        'Boss上聊天': ('Boss上聊天', 3),
-        '交换联系方式': ('交换联系方式', 4)
+        '浏览简历': ('浏览简历', 1),
+        '打招呼': ('打招呼', 2), 
+        '相互沟通': ('相互沟通', 3),
+        '建联量': ('建联量', 4)
     }
     
     funnel_data = []
@@ -156,10 +156,10 @@ def get_trend_data(start_date=None, end_date=None, user_id=None):
     # 添加事件类型映射 - 根据Prisma schema修正
     if not df.empty:
         event_type_mapping = {
-            '1': '查看简历',        # VIEW_RESUME
-            '2': '简历通过筛选',     # SCREEN_PASS
-            '12': 'Boss上聊天',     # BOSS_CHAT
-            '13': '交换联系方式'     # PHONE_NUMBER
+            '1': '浏览简历',        # VIEW_RESUME
+            '2': '打招呼',         # SCREEN_PASS
+            '12': '相互沟通',       # BOSS_CHAT
+            '13': '建联量'          # PHONE_NUMBER
         }
         df['event_type'] = df['event_type'].map(event_type_mapping).fillna(df['event_type'])
     
@@ -201,31 +201,37 @@ def get_key_metrics(start_date=None, end_date=None, user_id=None):
     
     if funnel_df.empty:
         return {
-            'total_views': 0,
-            'passed_screening': 0, 
-            'boss_chats': 0,
-            'contact_exchanges': 0,
-            'connection_rate': 0,
-            'chat_rate': 0
+            'browse_resumes': 0,
+            'greetings': 0, 
+            'mutual_communications': 0,
+            'connections': 0,
+            'greeting_success_rate': 0,
+            'communication_success_rate': 0,
+            'mutual_communication_rate': 0,
+            'resume_screening_rate': 0
         }
     
     # 获取各阶段数据
-    views = funnel_df[funnel_df['stage'] == '查看简历']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '查看简历']) > 0 else 0
-    screening = funnel_df[funnel_df['stage'] == '简历通过筛选']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '简历通过筛选']) > 0 else 0
-    chats = funnel_df[funnel_df['stage'] == 'Boss上聊天']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == 'Boss上聊天']) > 0 else 0
-    contacts = funnel_df[funnel_df['stage'] == '交换联系方式']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '交换联系方式']) > 0 else 0
+    views = funnel_df[funnel_df['stage'] == '浏览简历']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '浏览简历']) > 0 else 0
+    screening = funnel_df[funnel_df['stage'] == '打招呼']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '打招呼']) > 0 else 0
+    chats = funnel_df[funnel_df['stage'] == '相互沟通']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '相互沟通']) > 0 else 0
+    contacts = funnel_df[funnel_df['stage'] == '建联量']['count'].iloc[0] if len(funnel_df[funnel_df['stage'] == '建联量']) > 0 else 0
     
     # 计算转化率
-    connection_rate = (contacts / screening * 100) if screening > 0 else 0
-    chat_rate = (chats / screening * 100) if screening > 0 else 0
+    greeting_success_rate = (contacts / screening * 100) if screening > 0 else 0  # 建联量/打招呼数
+    communication_success_rate = (contacts / chats * 100) if chats > 0 else 0  # 建联量/相互沟通数
+    mutual_communication_rate = (chats / screening * 100) if screening > 0 else 0  # 相互沟通数/打招呼数
+    resume_screening_rate = (screening / views * 100) if views > 0 else 0  # 打招呼数/浏览简历
     
     return {
-        'total_views': views,
-        'passed_screening': screening,
-        'boss_chats': chats, 
-        'contact_exchanges': contacts,
-        'connection_rate': connection_rate,
-        'chat_rate': chat_rate
+        'browse_resumes': views,          # 浏览简历
+        'greetings': screening,           # 打招呼
+        'mutual_communications': chats,   # 相互沟通
+        'connections': contacts,          # 建联量
+        'greeting_success_rate': greeting_success_rate,           # 打招呼成功率
+        'communication_success_rate': communication_success_rate, # 沟通成功率
+        'mutual_communication_rate': mutual_communication_rate,   # 相互沟通率
+        'resume_screening_rate': resume_screening_rate            # 简历过筛率
     }
 
 def create_metric_card(title, value, change=None, format_type='number', icon=None):
@@ -343,10 +349,10 @@ def create_trend_chart(trend_df):
         
         # 定义颜色映射
         color_map = {
-            '查看简历': colors['primary'],
-            '简历通过筛选': colors['secondary'], 
-            'Boss上聊天': colors['warning'],
-            '交换联系方式': colors['success']
+            '浏览简历': colors['primary'],
+            '打招呼': colors['secondary'], 
+            '相互沟通': colors['warning'],
+            '建联量': colors['success']
         }
         
         # 添加每个事件类型的线条
@@ -431,10 +437,10 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None):
     # 添加事件类型映射 - 根据Prisma schema修正
     if not df.empty:
         event_type_mapping = {
-            '1': '查看简历',        # VIEW_RESUME
-            '2': '简历通过筛选',     # SCREEN_PASS
-            '12': 'Boss上聊天',     # BOSS_CHAT
-            '13': '交换联系方式'     # PHONE_NUMBER
+            '1': '浏览简历',        # VIEW_RESUME
+            '2': '打招呼',         # SCREEN_PASS
+            '12': '相互沟通',       # BOSS_CHAT
+            '13': '建联量'          # PHONE_NUMBER
         }
         df['事件类型'] = df['事件类型'].map(event_type_mapping).fillna(df['事件类型'])
     
@@ -675,12 +681,14 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         
         # 创建KPI卡片
         kpi_cards = [
-            create_metric_card("📊 简历查看总数", metrics['total_views'], None, 'number'),
-            create_metric_card("✅ 通过筛选数量", metrics['passed_screening'], None, 'number'),
-            create_metric_card("💬 Boss聊天数量", metrics['boss_chats'], None, 'number'),
-            create_metric_card("🤝 建联成功数量", metrics['contact_exchanges'], None, 'number'),
-            create_metric_card("📈 建联转化率", metrics['connection_rate'], None, 'percentage'),
-            create_metric_card("🎯 聊天转化率", metrics['chat_rate'], None, 'percentage')
+            create_metric_card("📊 浏览简历", metrics['browse_resumes'], None, 'number'),
+            create_metric_card("✅ 打招呼", metrics['greetings'], None, 'number'),
+            create_metric_card("💬 相互沟通", metrics['mutual_communications'], None, 'number'),
+            create_metric_card("🤝 建联量", metrics['connections'], None, 'number'),
+            create_metric_card("📈 打招呼成功率", metrics['greeting_success_rate'], None, 'percentage'),
+            create_metric_card("🎯 沟通成功率", metrics['communication_success_rate'], None, 'percentage'),
+            create_metric_card("💡 相互沟通率", metrics['mutual_communication_rate'], None, 'percentage'),
+            create_metric_card("📋 简历过筛率", metrics['resume_screening_rate'], None, 'percentage')
         ]
         
         # 创建图表
