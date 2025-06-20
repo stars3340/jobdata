@@ -518,6 +518,114 @@ def get_greeting_success_trend(start_date=None, end_date=None, user_id=None):
     
     return pd.DataFrame(success_rate_data)
 
+def get_communication_success_trend(start_date=None, end_date=None, user_id=None):
+    """获取沟通成功率趋势数据"""
+    where_conditions = []
+    
+    if start_date and end_date:
+        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+    
+    if user_id and user_id != 'all':
+        where_conditions.append(f"uid = '{user_id}'")
+    
+    where_clause = " AND ".join(where_conditions)
+    if where_clause:
+        where_clause = f"WHERE {where_clause}"
+    
+    sql = f"""
+    SELECT 
+        DATE(create_time) as date,
+        event_type,
+        COUNT(*) as count
+    FROM recruit_event 
+    {where_clause}
+    GROUP BY DATE(create_time), event_type
+    ORDER BY date ASC
+    """
+    
+    df = query_data(sql)
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    # 透视数据
+    pivot_df = df.pivot_table(
+        index='date', 
+        columns='event_type', 
+        values='count', 
+        fill_value=0
+    ).reset_index()
+    
+    # 计算每日沟通成功率
+    success_rate_data = []
+    for _, row in pivot_df.iterrows():
+        mutual_communications = row.get('12', 0)  # 相互沟通
+        connections = row.get('13', 0)  # 建联量
+        
+        success_rate = (connections / mutual_communications * 100) if mutual_communications > 0 else 0
+        success_rate_data.append({
+            'date': row['date'],
+            'communication_success_rate': success_rate,
+            'mutual_communications': mutual_communications,
+            'connections': connections
+        })
+    
+    return pd.DataFrame(success_rate_data)
+
+def get_mutual_communication_trend(start_date=None, end_date=None, user_id=None):
+    """获取相互沟通率趋势数据"""
+    where_conditions = []
+    
+    if start_date and end_date:
+        where_conditions.append(f"create_time BETWEEN '{start_date}' AND '{end_date} 23:59:59'")
+    
+    if user_id and user_id != 'all':
+        where_conditions.append(f"uid = '{user_id}'")
+    
+    where_clause = " AND ".join(where_conditions)
+    if where_clause:
+        where_clause = f"WHERE {where_clause}"
+    
+    sql = f"""
+    SELECT 
+        DATE(create_time) as date,
+        event_type,
+        COUNT(*) as count
+    FROM recruit_event 
+    {where_clause}
+    GROUP BY DATE(create_time), event_type
+    ORDER BY date ASC
+    """
+    
+    df = query_data(sql)
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    # 透视数据
+    pivot_df = df.pivot_table(
+        index='date', 
+        columns='event_type', 
+        values='count', 
+        fill_value=0
+    ).reset_index()
+    
+    # 计算每日相互沟通率
+    communication_rate_data = []
+    for _, row in pivot_df.iterrows():
+        greetings = row.get('2', 0)  # 打招呼
+        mutual_communications = row.get('12', 0)  # 相互沟通
+        
+        communication_rate = (mutual_communications / greetings * 100) if greetings > 0 else 0
+        communication_rate_data.append({
+            'date': row['date'],
+            'mutual_communication_rate': communication_rate,
+            'greetings': greetings,
+            'mutual_communications': mutual_communications
+        })
+    
+    return pd.DataFrame(communication_rate_data)
+
 def create_greeting_success_trend_chart(trend_df):
     """创建打招呼成功率趋势图"""
     # 创建图表，强制设置Y轴范围
@@ -604,6 +712,186 @@ def create_greeting_success_trend_chart(trend_df):
     
     # 最后一道保险：直接修改layout
     fig.layout.yaxis.range = [0, 5]
+    fig.layout.yaxis.autorange = False
+    
+    return fig
+
+def create_communication_success_trend_chart(trend_df):
+    """创建沟通成功率趋势图"""
+    # 创建图表，强制设置Y轴范围
+    fig = go.Figure()
+    
+    # 添加一个隐藏的空数据点来强制Y轴范围
+    fig.add_trace(go.Scatter(
+        x=[],
+        y=[0, 100],  # 强制Y轴从0到100
+        mode='markers',
+        marker=dict(opacity=0),  # 完全透明
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    if trend_df.empty:
+        # 暂无数据时显示提示
+        fig.add_annotation(
+            text="暂无数据",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color=colors['text'])
+        )
+    else:
+        # 添加沟通成功率线条
+        fig.add_trace(go.Scatter(
+            x=trend_df['date'],
+            y=trend_df['communication_success_rate'],
+            mode='lines+markers',
+            name='沟通成功率',
+            line=dict(color=colors['secondary'], width=3),
+            marker=dict(size=8, line=dict(width=2, color='white')),
+            hovertemplate='<b>沟通成功率</b><br>日期: %{x}<br>成功率: %{y:.1f}%<br>相互沟通: %{customdata[0]}<br>建联: %{customdata[1]}<extra></extra>',
+            customdata=list(zip(trend_df['mutual_communications'], trend_df['connections']))
+        ))
+    
+    # 强制布局设置
+    fig.update_layout(
+        title=dict(
+            text="<b>沟通成功率趋势分析</b>",
+            font=dict(size=20, color=colors['text']),
+            x=0.5
+        ),
+        xaxis=dict(
+            title=dict(text="日期", font=dict(color=colors['text'])),
+            tickfont=dict(color=colors['text']),
+            gridcolor='rgba(255,255,255,0.1)'
+        ),
+        yaxis=dict(
+            title=dict(text="成功率 (%)", font=dict(color=colors['text'])),
+            tickfont=dict(color=colors['text']),
+            gridcolor='rgba(255,255,255,0.1)',
+            range=[0, 100],
+            fixedrange=True,
+            autorange=False,
+            tickformat='.1f',
+            dtick=20,  # 每20%一个刻度
+            tick0=0,  # 从0开始
+            constrain='domain'
+        ),
+        legend=dict(
+            font=dict(color=colors['text']),
+            bgcolor='rgba(35, 41, 70, 0.8)',
+            bordercolor=colors['primary'],
+            borderwidth=1
+        ),
+        font=dict(color=colors['text']),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(t=80, b=60, l=60, r=40),
+        hovermode='x unified',
+        autosize=True
+    )
+    
+    # 多重强制设置Y轴
+    fig.update_yaxes(
+        range=[0, 100],
+        autorange=False, 
+        fixedrange=True,
+        constrain='domain',
+        dtick=20,
+        tick0=0
+    )
+    
+    # 最后一道保险：直接修改layout
+    fig.layout.yaxis.range = [0, 100]
+    fig.layout.yaxis.autorange = False
+    
+    return fig
+
+def create_mutual_communication_trend_chart(trend_df):
+    """创建相互沟通率趋势图"""
+    # 创建图表，强制设置Y轴范围
+    fig = go.Figure()
+    
+    # 添加一个隐藏的空数据点来强制Y轴范围
+    fig.add_trace(go.Scatter(
+        x=[],
+        y=[0, 10],  # 强制Y轴从0到10
+        mode='markers',
+        marker=dict(opacity=0),  # 完全透明
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    if trend_df.empty:
+        # 暂无数据时显示提示
+        fig.add_annotation(
+            text="暂无数据",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color=colors['text'])
+        )
+    else:
+        # 添加相互沟通率线条
+        fig.add_trace(go.Scatter(
+            x=trend_df['date'],
+            y=trend_df['mutual_communication_rate'],
+            mode='lines+markers',
+            name='相互沟通率',
+            line=dict(color=colors['warning'], width=3),
+            marker=dict(size=8, line=dict(width=2, color='white')),
+            hovertemplate='<b>相互沟通率</b><br>日期: %{x}<br>沟通率: %{y:.1f}%<br>打招呼: %{customdata[0]}<br>相互沟通: %{customdata[1]}<extra></extra>',
+            customdata=list(zip(trend_df['greetings'], trend_df['mutual_communications']))
+        ))
+    
+    # 强制布局设置
+    fig.update_layout(
+        title=dict(
+            text="<b>相互沟通率趋势分析</b>",
+            font=dict(size=20, color=colors['text']),
+            x=0.5
+        ),
+        xaxis=dict(
+            title=dict(text="日期", font=dict(color=colors['text'])),
+            tickfont=dict(color=colors['text']),
+            gridcolor='rgba(255,255,255,0.1)'
+        ),
+        yaxis=dict(
+            title=dict(text="沟通率 (%)", font=dict(color=colors['text'])),
+            tickfont=dict(color=colors['text']),
+            gridcolor='rgba(255,255,255,0.1)',
+            range=[0, 10],
+            fixedrange=True,
+            autorange=False,
+            tickformat='.1f',
+            dtick=2,  # 每2%一个刻度
+            tick0=0,  # 从0开始
+            constrain='domain'
+        ),
+        legend=dict(
+            font=dict(color=colors['text']),
+            bgcolor='rgba(35, 41, 70, 0.8)',
+            bordercolor=colors['primary'],
+            borderwidth=1
+        ),
+        font=dict(color=colors['text']),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(t=80, b=60, l=60, r=40),
+        hovermode='x unified',
+        autosize=True
+    )
+    
+    # 多重强制设置Y轴
+    fig.update_yaxes(
+        range=[0, 10],
+        autorange=False, 
+        fixedrange=True,
+        constrain='domain',
+        dtick=2,
+        tick0=0
+    )
+    
+    # 最后一道保险：直接修改layout
+    fig.layout.yaxis.range = [0, 10]
     fig.layout.yaxis.autorange = False
     
     return fig
@@ -718,6 +1006,29 @@ app.layout = html.Div([
             ], className="card")
         ], style={'marginBottom': '2.5rem'}),
         
+        # 新增沟通成功率和相互沟通率趋势图
+        html.Div([
+            html.Div([
+                html.Div([
+                    html.Div([
+                        html.H2("🎯 沟通成功率趋势分析", className="card-title"),
+                        html.Div(id="comm-success-trend-loading", children=create_loading_component())
+                    ], className="card-header"),
+                    dcc.Graph(id="comm-success-trend-chart", style={'display': 'none'})
+                ], className="card")
+            ], style={'gridColumn': '1'}),
+            
+            html.Div([
+                html.Div([
+                    html.Div([
+                        html.H2("💡 相互沟通率趋势分析", className="card-title"),
+                        html.Div(id="mutual-comm-trend-loading", children=create_loading_component())
+                    ], className="card-header"),
+                    dcc.Graph(id="mutual-comm-trend-chart", style={'display': 'none'})
+                ], className="card")
+            ], style={'gridColumn': '2'})
+        ], className="content-grid", style={'marginBottom': '2.5rem'}),
+        
         # 详细数据表格
         html.Div([
             html.Div([
@@ -773,6 +1084,12 @@ def update_auto_refresh(interval_value):
      Output('success-trend-chart', 'figure'),
      Output('success-trend-chart', 'style'),
      Output('success-trend-loading', 'style'),
+     Output('comm-success-trend-chart', 'figure'),
+     Output('comm-success-trend-chart', 'style'),
+     Output('comm-success-trend-loading', 'style'),
+     Output('mutual-comm-trend-chart', 'figure'),
+     Output('mutual-comm-trend-chart', 'style'),
+     Output('mutual-comm-trend-loading', 'style'),
      Output('data-table-container', 'children'),
      Output('data-table-container', 'style'),
      Output('data-table-loading', 'style'),
@@ -795,6 +1112,8 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         funnel_df = get_funnel_data(start_date, end_date, user_id)
         trend_df = get_trend_data(start_date, end_date, user_id)
         success_trend_df = get_greeting_success_trend(start_date, end_date, user_id)
+        comm_success_trend_df = get_communication_success_trend(start_date, end_date, user_id)
+        mutual_comm_trend_df = get_mutual_communication_trend(start_date, end_date, user_id)
         detailed_df = get_detailed_data(start_date, end_date, user_id)
         
         # 创建KPI卡片（包含计算方式）
@@ -817,6 +1136,8 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         funnel_chart = create_funnel_chart(funnel_df)
         trend_chart = create_trend_chart(trend_df)
         success_trend_chart = create_greeting_success_trend_chart(success_trend_df)
+        comm_success_trend_chart = create_communication_success_trend_chart(comm_success_trend_df)
+        mutual_comm_trend_chart = create_mutual_communication_trend_chart(mutual_comm_trend_df)
         
         # 创建数据表格
         if not detailed_df.empty:
@@ -863,6 +1184,8 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
             funnel_chart, {'display': 'block'}, hidden_style,
             trend_chart, {'display': 'block'}, hidden_style,
             success_trend_chart, {'display': 'block'}, hidden_style,
+            comm_success_trend_chart, {'display': 'block'}, hidden_style,
+            mutual_comm_trend_chart, {'display': 'block'}, hidden_style,
             data_table, {'display': 'block'}, hidden_style,
             update_time,
             time.time()
@@ -878,6 +1201,8 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         
         return (
             [error_msg],
+            {}, hidden_style, hidden_style,
+            {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
@@ -898,28 +1223,218 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
 def export_excel(n_clicks, start_date, end_date, user_id):
     if n_clicks:
         try:
-            # 获取详细数据
-            df = get_detailed_data(start_date, end_date, user_id)
-            if not df.empty:
-                # 移除ID列
-                if 'id' in df.columns:
-                    df = df.drop(columns=['id'])
+            # 获取所有数据
+            raw_data_df = get_detailed_data(start_date, end_date, user_id)
+            metrics = get_key_metrics(start_date, end_date, user_id)
+            success_trend_df = get_greeting_success_trend(start_date, end_date, user_id)
+            comm_success_trend_df = get_communication_success_trend(start_date, end_date, user_id)
+            mutual_comm_trend_df = get_mutual_communication_trend(start_date, end_date, user_id)
+            
+            # 生成文件名
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"智能招聘数据分析_{timestamp}.xlsx"
+            
+            # 创建Excel文件
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 
-                # 生成文件名
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"招聘数据_{timestamp}.xlsx"
+                # 1. 原始数据表
+                if not raw_data_df.empty:
+                    display_df = raw_data_df.drop(columns=['id'] if 'id' in raw_data_df.columns else [])
+                    display_df.to_excel(writer, sheet_name='01_原始数据', index=False)
                 
-                # 创建Excel文件
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df.to_excel(writer, sheet_name='招聘数据', index=False)
+                # 2. KPI指标汇总表
+                kpi_data = {
+                    'KPI指标': [
+                        '浏览简历数',
+                        '打招呼数', 
+                        '相互沟通数',
+                        '建联量',
+                        '打招呼成功率(%)',
+                        '沟通成功率(%)',
+                        '相互沟通率(%)',
+                        '简历过筛率(%)'
+                    ],
+                    '数值': [
+                        metrics['browse_resumes'],
+                        metrics['greetings'],
+                        metrics['mutual_communications'],
+                        metrics['connections'],
+                        metrics['greeting_success_rate'],
+                        metrics['communication_success_rate'],
+                        metrics['mutual_communication_rate'],
+                        metrics['resume_screening_rate']
+                    ],
+                    '计算公式': [
+                        '直接统计',
+                        '直接统计',
+                        '直接统计', 
+                        '直接统计',
+                        '=B5/B3*100',
+                        '=B5/B4*100', 
+                        '=B4/B3*100',
+                        '=B3/B2*100'
+                    ],
+                    '说明': [
+                        '事件类型=1的记录数',
+                        '事件类型=2的记录数',
+                        '事件类型=12的记录数',
+                        '事件类型=13的记录数',
+                        '建联量÷打招呼数×100%',
+                        '建联量÷相互沟通数×100%',
+                        '相互沟通数÷打招呼数×100%',
+                        '打招呼数÷浏览简历数×100%'
+                    ]
+                }
+                kpi_df = pd.DataFrame(kpi_data)
+                kpi_df.to_excel(writer, sheet_name='02_KPI指标汇总', index=False)
                 
-                output.seek(0)
+                # 3. 打招呼成功率趋势
+                if not success_trend_df.empty:
+                    trend_data = success_trend_df.copy()
+                    # 添加计算公式列
+                    formula_col = []
+                    for i in range(len(trend_data)):
+                        formula_col.append(f'=D{i+2}/C{i+2}*100')
+                    trend_data['成功率计算公式'] = formula_col
+                    trend_data.to_excel(writer, sheet_name='03_打招呼成功率趋势', index=False)
                 
-                # 触发下载
-                return dcc.send_bytes(output.getvalue(), filename)
+                # 4. 沟通成功率趋势
+                if not comm_success_trend_df.empty:
+                    comm_trend_data = comm_success_trend_df.copy()
+                    # 添加计算公式列
+                    formula_col = []
+                    for i in range(len(comm_trend_data)):
+                        formula_col.append(f'=D{i+2}/C{i+2}*100')
+                    comm_trend_data['成功率计算公式'] = formula_col  
+                    comm_trend_data.to_excel(writer, sheet_name='04_沟通成功率趋势', index=False)
+                
+                # 5. 相互沟通率趋势
+                if not mutual_comm_trend_df.empty:
+                    mutual_trend_data = mutual_comm_trend_df.copy()
+                    # 添加计算公式列
+                    formula_col = []
+                    for i in range(len(mutual_trend_data)):
+                        formula_col.append(f'=D{i+2}/C{i+2}*100')
+                    mutual_trend_data['沟通率计算公式'] = formula_col
+                    mutual_trend_data.to_excel(writer, sheet_name='05_相互沟通率趋势', index=False)
+                
+                # 6. 数据字典说明
+                dict_data = {
+                    '字段名': [
+                        'event_type',
+                        'event_type=1',
+                        'event_type=2', 
+                        'event_type=12',
+                        'event_type=13',
+                        'create_time',
+                        'uid',
+                        'user_name'
+                    ],
+                    '含义': [
+                        '事件类型',
+                        '浏览简历',
+                        '打招呼',
+                        '相互沟通',
+                        '建联量',
+                        '事件发生时间',
+                        '用户ID',
+                        '用户姓名'
+                    ],
+                    '说明': [
+                        '区分不同类型的招聘行为',
+                        'HR查看候选人简历',
+                        'HR主动向候选人打招呼',
+                        'HR与候选人进行相互交流',
+                        'HR成功与候选人建立联系',
+                        '精确到秒的时间戳',
+                        '用户唯一标识符',
+                        '用户真实姓名'
+                    ]
+                }
+                dict_df = pd.DataFrame(dict_data)
+                dict_df.to_excel(writer, sheet_name='06_数据字典', index=False)
+                
+                # 7. 计算公式说明
+                formula_data = {
+                    '指标名称': [
+                        '打招呼成功率',
+                        '沟通成功率',
+                        '相互沟通率',
+                        '简历过筛率'
+                    ],
+                    'Excel公式': [
+                        '=建联量/打招呼数*100',
+                        '=建联量/相互沟通数*100',
+                        '=相互沟通数/打招呼数*100',
+                        '=打招呼数/浏览简历数*100'
+                    ],
+                    '业务含义': [
+                        '衡量打招呼后建立连接的效率',
+                        '衡量沟通后建立连接的效率', 
+                        '衡量打招呼后获得回应的比例',
+                        '衡量简历筛选后主动联系的比例'
+                    ],
+                    '优化建议': [
+                        '提高个人资料完整度，优化打招呼话术',
+                        '改进沟通技巧，提供有价值的信息',
+                        '优化打招呼时机和内容吸引力',
+                        '提高简历筛选精准度，避免无效联系'
+                    ]
+                }
+                formula_df = pd.DataFrame(formula_data)
+                formula_df.to_excel(writer, sheet_name='07_公式说明', index=False)
+                
+                # 设置Excel样式
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                
+                workbook = writer.book
+                
+                # 定义样式
+                header_font = Font(bold=True, size=12, color="FFFFFF")
+                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                center_align = Alignment(horizontal="center", vertical="center")
+                thin_border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'), 
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                
+                # 为每个工作表设置样式
+                for sheet_name in workbook.sheetnames:
+                    worksheet = workbook[sheet_name]
+                    
+                    # 设置表头样式
+                    if worksheet.max_row > 0:
+                        for cell in worksheet[1]:
+                            cell.font = header_font
+                            cell.fill = header_fill
+                            cell.alignment = center_align
+                            cell.border = thin_border
+                    
+                    # 自动调整列宽
+                    for column in worksheet.columns:
+                        max_length = 0
+                        column_letter = column[0].column_letter
+                        for cell in column:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 2, 50)
+                        worksheet.column_dimensions[column_letter].width = adjusted_width
+                
+            output.seek(0)
+            
+            # 触发下载
+            return dcc.send_bytes(output.getvalue(), filename)
+            
         except Exception as e:
             print(f"导出Excel失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     return dash.no_update
 
