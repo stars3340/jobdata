@@ -417,7 +417,7 @@ def create_trend_chart(trend_df):
     
     return fig
 
-def get_detailed_data(start_date=None, end_date=None, user_id=None):
+def get_detailed_data(start_date=None, end_date=None, user_id=None, limit=None):
     """获取详细数据"""
     where_conditions = []
     
@@ -430,6 +430,9 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None):
     where_clause = " AND ".join(where_conditions)
     if where_clause:
         where_clause = f"WHERE {where_clause}"
+    
+    # 添加LIMIT控制，导出时不限制，显示时限制1000条
+    limit_clause = f"LIMIT {limit}" if limit else ""
     
     sql = f"""
     SELECT 
@@ -447,7 +450,7 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None):
     LEFT JOIN user u ON re.uid = u.id
     {where_clause}
     ORDER BY re.create_time DESC
-    LIMIT 1000
+    {limit_clause}
     """
     
     df = query_data(sql)
@@ -1114,7 +1117,7 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         success_trend_df = get_greeting_success_trend(start_date, end_date, user_id)
         comm_success_trend_df = get_communication_success_trend(start_date, end_date, user_id)
         mutual_comm_trend_df = get_mutual_communication_trend(start_date, end_date, user_id)
-        detailed_df = get_detailed_data(start_date, end_date, user_id)
+        detailed_df = get_detailed_data(start_date, end_date, user_id, limit=1000)
         
         # 创建KPI卡片（包含计算方式）
         kpi_cards = [
@@ -1223,12 +1226,14 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
 def export_excel(n_clicks, start_date, end_date, user_id):
     if n_clicks:
         try:
-            # 获取所有数据
-            raw_data_df = get_detailed_data(start_date, end_date, user_id)
+            # 获取所有数据（不限制条数）
+            raw_data_df = get_detailed_data(start_date, end_date, user_id, limit=None)
             metrics = get_key_metrics(start_date, end_date, user_id)
             success_trend_df = get_greeting_success_trend(start_date, end_date, user_id)
             comm_success_trend_df = get_communication_success_trend(start_date, end_date, user_id)
             mutual_comm_trend_df = get_mutual_communication_trend(start_date, end_date, user_id)
+            funnel_df = get_funnel_data(start_date, end_date, user_id)
+            trend_df = get_trend_data(start_date, end_date, user_id)
             
             # 生成文件名
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1243,7 +1248,7 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                     display_df = raw_data_df.drop(columns=['id'] if 'id' in raw_data_df.columns else [])
                     display_df.to_excel(writer, sheet_name='01_原始数据', index=False)
                 
-                # 2. KPI指标汇总表
+                # 2. KPI指标汇总表（使用真实的Excel公式）
                 kpi_data = {
                     'KPI指标': [
                         '浏览简历数',
@@ -1260,66 +1265,119 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                         metrics['greetings'],
                         metrics['mutual_communications'],
                         metrics['connections'],
-                        metrics['greeting_success_rate'],
-                        metrics['communication_success_rate'],
-                        metrics['mutual_communication_rate'],
-                        metrics['resume_screening_rate']
+                        '=IF(B3=0,0,B5/B3*100)',  # 使用真实的Excel公式
+                        '=IF(B4=0,0,B5/B4*100)', 
+                        '=IF(B3=0,0,B4/B3*100)',
+                        '=IF(B2=0,0,B3/B2*100)'
                     ],
-                    '计算公式': [
+                    '计算公式说明': [
                         '直接统计',
                         '直接统计',
                         '直接统计', 
                         '直接统计',
-                        '=B5/B3*100',
-                        '=B5/B4*100', 
-                        '=B4/B3*100',
-                        '=B3/B2*100'
-                    ],
-                    '说明': [
-                        '事件类型=1的记录数',
-                        '事件类型=2的记录数',
-                        '事件类型=12的记录数',
-                        '事件类型=13的记录数',
                         '建联量÷打招呼数×100%',
                         '建联量÷相互沟通数×100%',
                         '相互沟通数÷打招呼数×100%',
                         '打招呼数÷浏览简历数×100%'
+                    ],
+                    '业务含义': [
+                        '事件类型=1的记录数',
+                        '事件类型=2的记录数',
+                        '事件类型=12的记录数',
+                        '事件类型=13的记录数',
+                        '衡量打招呼后建立连接的效率',
+                        '衡量沟通后建立连接的效率',
+                        '衡量打招呼后获得回应的比例',
+                        '衡量简历筛选后主动联系的比例'
                     ]
                 }
                 kpi_df = pd.DataFrame(kpi_data)
                 kpi_df.to_excel(writer, sheet_name='02_KPI指标汇总', index=False)
                 
-                # 3. 打招呼成功率趋势
+                # 3. 漏斗分析数据
+                if not funnel_df.empty:
+                    funnel_data = funnel_df.copy()
+                    # 添加转化率计算公式
+                    funnel_data['总体转化率(%)'] = [
+                        '=B2/B2*100',  # 浏览简历基准
+                        '=IF(B2=0,0,B3/B2*100)',  # 打招呼/浏览简历
+                        '=IF(B2=0,0,B4/B2*100)',  # 相互沟通/浏览简历
+                        '=IF(B2=0,0,B5/B2*100)'   # 建联量/浏览简历
+                    ]
+                    funnel_data['上级转化率(%)'] = [
+                        '=B2/B2*100',  # 浏览简历基准
+                        '=IF(B2=0,0,B3/B2*100)',  # 打招呼/浏览简历
+                        '=IF(B3=0,0,B4/B3*100)',  # 相互沟通/打招呼
+                        '=IF(B4=0,0,B5/B4*100)'   # 建联量/相互沟通
+                    ]
+                    funnel_data.to_excel(writer, sheet_name='03_漏斗分析数据', index=False)
+                    
+                # 4. 每日活动趋势
+                if not trend_df.empty:
+                    trend_pivot = trend_df.pivot_table(
+                        index='date', 
+                        columns='event_type', 
+                        values='count', 
+                        fill_value=0
+                    ).reset_index()
+                    trend_pivot.to_excel(writer, sheet_name='04_每日活动趋势', index=False)
+                
+                # 5. 打招呼成功率趋势
                 if not success_trend_df.empty:
                     trend_data = success_trend_df.copy()
-                    # 添加计算公式列
-                    formula_col = []
-                    for i in range(len(trend_data)):
-                        formula_col.append(f'=D{i+2}/C{i+2}*100')
-                    trend_data['成功率计算公式'] = formula_col
-                    trend_data.to_excel(writer, sheet_name='03_打招呼成功率趋势', index=False)
+                    # 使用真实的Excel公式
+                    trend_data['成功率公式验证'] = [f'=IF(C{i+2}=0,0,D{i+2}/C{i+2}*100)' for i in range(len(trend_data))]
+                    trend_data.to_excel(writer, sheet_name='05_打招呼成功率趋势', index=False)
                 
-                # 4. 沟通成功率趋势
+                # 6. 沟通成功率趋势
                 if not comm_success_trend_df.empty:
                     comm_trend_data = comm_success_trend_df.copy()
-                    # 添加计算公式列
-                    formula_col = []
-                    for i in range(len(comm_trend_data)):
-                        formula_col.append(f'=D{i+2}/C{i+2}*100')
-                    comm_trend_data['成功率计算公式'] = formula_col  
-                    comm_trend_data.to_excel(writer, sheet_name='04_沟通成功率趋势', index=False)
+                    # 使用真实的Excel公式
+                    comm_trend_data['成功率公式验证'] = [f'=IF(C{i+2}=0,0,D{i+2}/C{i+2}*100)' for i in range(len(comm_trend_data))]  
+                    comm_trend_data.to_excel(writer, sheet_name='06_沟通成功率趋势', index=False)
                 
-                # 5. 相互沟通率趋势
+                # 7. 相互沟通率趋势
                 if not mutual_comm_trend_df.empty:
                     mutual_trend_data = mutual_comm_trend_df.copy()
-                    # 添加计算公式列
-                    formula_col = []
-                    for i in range(len(mutual_trend_data)):
-                        formula_col.append(f'=D{i+2}/C{i+2}*100')
-                    mutual_trend_data['沟通率计算公式'] = formula_col
-                    mutual_trend_data.to_excel(writer, sheet_name='05_相互沟通率趋势', index=False)
+                    # 使用真实的Excel公式
+                    mutual_trend_data['沟通率公式验证'] = [f'=IF(C{i+2}=0,0,D{i+2}/C{i+2}*100)' for i in range(len(mutual_trend_data))]
+                    mutual_trend_data.to_excel(writer, sheet_name='07_相互沟通率趋势', index=False)
                 
-                # 6. 数据字典说明
+                # 8. 图表数据汇总（用于创建图表）
+                if not trend_df.empty and not success_trend_df.empty:
+                    # 创建综合的图表数据表
+                    chart_summary = []
+                    
+                    # 基础活动数据（来自网页折线图）
+                    trend_pivot = trend_df.pivot_table(
+                        index='date', 
+                        columns='event_type', 
+                        values='count', 
+                        fill_value=0
+                    ).reset_index()
+                    
+                    # 合并所有趋势数据
+                    chart_data = trend_pivot.copy()
+                    if not success_trend_df.empty:
+                        chart_data = chart_data.merge(success_trend_df[['date', 'greeting_success_rate']], on='date', how='outer')
+                    if not comm_success_trend_df.empty:
+                        chart_data = chart_data.merge(comm_success_trend_df[['date', 'communication_success_rate']], on='date', how='outer')
+                    if not mutual_comm_trend_df.empty:
+                        chart_data = chart_data.merge(mutual_comm_trend_df[['date', 'mutual_communication_rate']], on='date', how='outer')
+                    
+                    # 填充空值
+                    chart_data = chart_data.fillna(0)
+                    chart_data = chart_data.sort_values('date')
+                    
+                    # 重新排列列的顺序，使其更直观
+                    cols = ['date']
+                    event_cols = [col for col in chart_data.columns if col not in ['date', 'greeting_success_rate', 'communication_success_rate', 'mutual_communication_rate']]
+                    rate_cols = ['greeting_success_rate', 'communication_success_rate', 'mutual_communication_rate']
+                    chart_data = chart_data[cols + event_cols + rate_cols]
+                    
+                    chart_data.to_excel(writer, sheet_name='08_图表数据汇总', index=False)
+                
+                # 9. 数据字典说明
                 dict_data = {
                     '字段名': [
                         'event_type',
@@ -1329,7 +1387,9 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                         'event_type=13',
                         'create_time',
                         'uid',
-                        'user_name'
+                        'user_name',
+                        'resume_id',
+                        'job_id'
                     ],
                     '含义': [
                         '事件类型',
@@ -1339,7 +1399,9 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                         '建联量',
                         '事件发生时间',
                         '用户ID',
-                        '用户姓名'
+                        '用户姓名',
+                        '简历ID',
+                        '职位ID'
                     ],
                     '说明': [
                         '区分不同类型的招聘行为',
@@ -1349,41 +1411,105 @@ def export_excel(n_clicks, start_date, end_date, user_id):
                         'HR成功与候选人建立联系',
                         '精确到秒的时间戳',
                         '用户唯一标识符',
-                        '用户真实姓名'
+                        '用户真实姓名或生成的显示名',
+                        '被查看简历的唯一标识',
+                        '相关职位的唯一标识'
                     ]
                 }
                 dict_df = pd.DataFrame(dict_data)
-                dict_df.to_excel(writer, sheet_name='06_数据字典', index=False)
+                dict_df.to_excel(writer, sheet_name='09_数据字典', index=False)
                 
-                # 7. 计算公式说明
+                # 10. 计算公式说明
                 formula_data = {
                     '指标名称': [
                         '打招呼成功率',
                         '沟通成功率',
                         '相互沟通率',
-                        '简历过筛率'
+                        '简历过筛率',
+                        '总体转化率',
+                        '上级转化率'
                     ],
-                    'Excel公式': [
-                        '=建联量/打招呼数*100',
-                        '=建联量/相互沟通数*100',
-                        '=相互沟通数/打招呼数*100',
-                        '=打招呼数/浏览简历数*100'
+                    'Excel公式模板': [
+                        '=IF(打招呼数=0,0,建联量/打招呼数*100)',
+                        '=IF(相互沟通数=0,0,建联量/相互沟通数*100)',
+                        '=IF(打招呼数=0,0,相互沟通数/打招呼数*100)',
+                        '=IF(浏览简历数=0,0,打招呼数/浏览简历数*100)',
+                        '以浏览简历为基准计算各阶段占比',
+                        '以上一级为基准计算转化率'
                     ],
                     '业务含义': [
                         '衡量打招呼后建立连接的效率',
                         '衡量沟通后建立连接的效率', 
                         '衡量打招呼后获得回应的比例',
-                        '衡量简历筛选后主动联系的比例'
+                        '衡量简历筛选后主动联系的比例',
+                        '衡量整体流程中各环节的绝对效率',
+                        '衡量相邻环节间的转化效率'
                     ],
                     '优化建议': [
                         '提高个人资料完整度，优化打招呼话术',
                         '改进沟通技巧，提供有价值的信息',
                         '优化打招呼时机和内容吸引力',
-                        '提高简历筛选精准度，避免无效联系'
+                        '提高简历筛选精准度，避免无效联系',
+                        '关注整体流程优化，减少各环节流失',
+                        '重点关注转化率低的相邻环节'
                     ]
                 }
                 formula_df = pd.DataFrame(formula_data)
-                formula_df.to_excel(writer, sheet_name='07_公式说明', index=False)
+                formula_df.to_excel(writer, sheet_name='10_公式说明', index=False)
+                
+                # 11. 使用说明
+                usage_data = {
+                    '表格名称': [
+                        '01_原始数据',
+                        '02_KPI指标汇总',
+                        '03_漏斗分析数据',
+                        '04_每日活动趋势',
+                        '05_打招呼成功率趋势',
+                        '06_沟通成功率趋势',
+                        '07_相互沟通率趋势',
+                        '08_图表数据汇总',
+                        '09_数据字典',
+                        '10_公式说明'
+                    ],
+                    '用途说明': [
+                        '完整的原始数据，可用于进一步分析',
+                        '关键指标汇总，B列包含Excel公式自动计算',
+                        '漏斗分析，包含转化率的Excel公式计算',
+                        '每日各类活动的统计数据',
+                        '每日打招呼成功率变化趋势',
+                        '每日沟通成功率变化趋势',
+                        '每日相互沟通率变化趋势',
+                        '所有图表数据的汇总，可用于制作Excel图表',
+                        '数据字段的详细解释',
+                        '所有计算公式的说明和优化建议'
+                    ],
+                    'Excel功能': [
+                        '支持筛选、排序、数据透视表',
+                        '公式自动计算，数据更新时同步更新',
+                        '转化率公式自动计算',
+                        '可制作柱状图、折线图',
+                        '可制作趋势折线图',
+                        '可制作趋势折线图',
+                        '可制作趋势折线图',
+                        '推荐制作综合仪表板图表',
+                        '参考查询，不建议修改',
+                        '参考查询，包含优化建议'
+                    ],
+                    '建议操作': [
+                        '按日期、用户、事件类型筛选分析',
+                        '监控各项指标变化，关注公式计算结果',
+                        '分析转化率，识别优化机会',
+                        '制作活动趋势图表，观察周期性规律',
+                        '制作成功率趋势图，找出最佳时机',
+                        '制作成功率趋势图，优化沟通策略',
+                        '制作沟通率趋势图，提高回应率',
+                        '制作综合数据看板，一次性展示所有指标',
+                        '了解数据含义，正确解读分析结果',
+                        '参考优化建议，制定改进措施'
+                    ]
+                }
+                usage_df = pd.DataFrame(usage_data)
+                usage_df.to_excel(writer, sheet_name='00_使用说明', index=False)
                 
                 # 设置Excel样式
                 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
