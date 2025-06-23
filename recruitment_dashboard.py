@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, date
 import warnings
 import time
 import io
+import functools
+from flask_caching import Cache
 
 # 过滤警告
 warnings.filterwarnings('ignore')
@@ -18,60 +20,186 @@ from config import Config
 
 DB_CONFIG = Config.DB_CONFIG
 
-def get_db_connection():
-    """获取数据库连接"""
-    try:
-        # 添加连接参数优化
-        config = DB_CONFIG.copy()
-        config.update({
-            'connect_timeout': 10,
-            'read_timeout': 30,
-            'write_timeout': 30,
-            'autocommit': True
-        })
-        return pymysql.connect(**config)
-    except Exception as e:
-        print(f"数据库连接失败: {e}")
-        return None
+# 连接池配置
+from pymysql.connections import Connection
+from queue import Queue
+import threading
 
-def query_data(sql):
-    """执行SQL查询并返回DataFrame"""
-    connection = get_db_connection()
-    if connection:
+class ConnectionPool:
+    """数据库连接池"""
+    def __init__(self, max_connections=10):
+        self.max_connections = max_connections
+        self.pool = Queue(maxsize=max_connections)
+        self.lock = threading.Lock()
+        self._initialize_pool()
+    
+    def _initialize_pool(self):
+        """初始化连接池"""
+        for _ in range(self.max_connections):
+            try:
+                config = DB_CONFIG.copy()
+                config.update({
+                    'connect_timeout': 10,
+                    'read_timeout': 30,
+                    'write_timeout': 30,
+                    'autocommit': True
+                })
+                conn = pymysql.connect(**config)
+                self.pool.put(conn)
+            except Exception as e:
+                print(f"连接池初始化失败: {e}")
+    
+    def get_connection(self):
+        """获取连接"""
         try:
-            df = pd.read_sql(sql, connection)
-            return df
-        except Exception as e:
-            print(f"查询执行失败: {e}")
-            return pd.DataFrame()
-        finally:
-            connection.close()
-    return pd.DataFrame()
+            return self.pool.get(timeout=5)
+        except:
+            # 如果池中没有连接，创建新连接
+            config = DB_CONFIG.copy()
+            config.update({
+                'connect_timeout': 10,
+                'read_timeout': 30,
+                'write_timeout': 30,
+                'autocommit': True
+            })
+            return pymysql.connect(**config)
+    
+    def return_connection(self, conn):
+        """归还连接"""
+        if conn and conn.open:
+            try:
+                self.pool.put_nowait(conn)
+            except:
+                conn.close()
 
-# 创建Dash应用
-app = dash.Dash(__name__, external_stylesheets=['assets/style.css'])
-app.title = "智能招聘数据分析平台"
+# 全局连接池
+connection_pool = ConnectionPool()
 
-# 定义颜色主题
-colors = {
-    'primary': '#06D6A0',
-    'secondary': '#118AB2',
-    'success': '#06D6A0',
-    'warning': '#FFD166',
-    'danger': '#EF476F',
-    'background': '#0A0E1A',
-    'text': '#FFFFFF'
+def get_db_connection():
+    """获取数据库连接（使用连接池）"""
+    return connection_pool.get_connection()
+
+# 缓存装饰器
+def cache_result(timeout=300):
+    """缓存查询结果装饰器"""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # 生成缓存键
+            cache_key = f"{func.__name__}_{hash(str(args) + str(kwargs))}"
+            
+            # 尝试从缓存获取
+            cached_result = getattr(wrapper, '_cache', {}).get(cache_key)
+            if cached_result:
+                cache_time, result = cached_result
+                if time.time() - cache_time < timeout:
+                    return result
+            
+            # 执行函数并缓存结果
+            result = func(*args, **kwargs)
+            if not hasattr(wrapper, '_cache'):
+                wrapper._cache = {}
+            wrapper._cache[cache_key] = (time.time(), result)
+            
+            # 清理过期缓存
+            current_time = time.time()
+            wrapper._cache = {
+                k: v for k, v in wrapper._cache.items() 
+                if current_time - v[0] < timeout
+            }
+            
+            return result
+        return wrapper
+    return decorator
+
+# 用户姓名映射数据（基于您提供的数据）
+USER_NAME_MAPPING = {
+    '6819d58488dd00aa95eb783c': '潘铭炜',
+    '681d6f0f99691dc6f038c371': '敖特',
+    '681db18619524dc1c85ab2c': '黄子豪',
+    '68219325461ffb28c9c1e4b1': '谢青池',
+    '68219deb34e8e8f90c5b92cf': '赵路明',
+    '68271797900bd9a3ef50dabd8': '魏小康',
+    '68271a2ffc7e1b551cdg4f35': '张家瑞',
+    '682a9dd324e84b570b10c41a': '黄世亮',
+    '682e88f7e978ecdaf91211d6': '王照星',
+    '68352819b30cf651b5f7d3ca': '杨佳-小象武汉',
+    '68352828e21bb1cb724c4b6': '孙立-小象武汉',
+    '683589e4c827799190284a81': '常天行',
+    '68359da274dd26545a369644': '邵长晨-骑行',
+    '68359dbaf9770c7040744e15': '徐海伦-骑行',
+    '68359dcd58142801fb5f8df8': '童庆豪-骑行',
+    '6836cd8242f4d6d0d3bde8b3': '徐彤-骑行',
+    '6836cdabe798732abd715e49': '刘雪松-骑行',
+    '6836f1a4b00b042d4957185b': '刘维祺-履约AI招聘',
+    '6836f1de471c9548681f1e6f': '冯思怡-优选招聘',
+    '6836f2006f041a0de3ea817f': '甘晨灼-优选招聘',
+    '6836f2248f6f926b67867f7e': '刘胜-优选',
+    '684296192f6f878efee1e822f': '罗璇-小象招聘（北京）',
+    '68429aa363c37ff72fe624c7': '庄舒雁',
+    '6847ab3c59b5335e5bbf8b4e': '杨绍良-小象北京',
+    '684a302a326a09745e641efd': '张丽-服体招聘',
+    '684a30675ba20c4b3feb8763': '张金宇',
+    '684fc6b22185f7850fab1465': '汤冰瑶-外部（东莞骑手加盟商）',
+    '684fc6d44f48af4c4c05cea8': '檀丽丽-外部（东莞骑手加盟商）',
+    '685134aae44bc1878f4078bc': '徐源-服体地企招聘/扬州和南通招聘',
+    '6854cd54dd271f9fcc62c86': '屈悦-小象北京',
+    '6854cd5924a27df3ff130403': '罗璇-小象北京',
+    '68553b6900eb715e5a088d61': '宋嘉乐'
 }
 
-def create_loading_component():
-    """创建加载组件"""
-    return html.Div([
-        html.Div(className="loading-spinner"),
-        html.Span("数据加载中...", style={'marginLeft': '10px', 'color': colors['text']})
-    ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center', 'padding': '20px'})
+@cache_result(timeout=600)  # 10分钟缓存，用户列表变化较少
+def get_user_list():
+    """获取用户列表（使用真实姓名映射）"""
+    sql = """
+    SELECT 
+        u.id,
+        u.name,
+        u.provider_id,
+        COUNT(re.id) as event_count,
+        MAX(re.create_time) as last_activity
+    FROM user u
+    LEFT JOIN recruit_event re ON u.id = re.uid
+    GROUP BY u.id, u.name, u.provider_id
+    HAVING event_count > 0
+    ORDER BY event_count DESC
+    LIMIT 100
+    """
+    df = query_data(sql)
+    
+    options = [{'label': '全部用户', 'value': 'all'}]
+    
+    if not df.empty:
+        for _, row in df.iterrows():
+            user_id = str(row['id'])
+            provider_id = str(row['provider_id']) if row['provider_id'] else None
+            
+            # 优先使用映射表中的真实姓名
+            if provider_id and provider_id in USER_NAME_MAPPING:
+                display_name = USER_NAME_MAPPING[provider_id]
+            elif row['name']:
+                display_name = row['name']
+            else:
+                display_name = f'用户-{user_id[:8]}'
+            
+            event_count = row['event_count']
+            
+            # 显示更丰富的用户信息
+            label = f"{display_name} ({event_count}条)"
+            if row['last_activity']:
+                last_date = row['last_activity'].strftime('%m-%d') if hasattr(row['last_activity'], 'strftime') else str(row['last_activity'])[:10]
+                label += f" [最近: {last_date}]"
+            
+            options.append({
+                'label': label,
+                'value': user_id
+            })
+    
+    return options
 
+@cache_result(timeout=300)  # 5分钟缓存
 def get_funnel_data(start_date=None, end_date=None, user_id=None):
-    """获取漏斗数据"""
+    """获取漏斗数据（缓存优化）"""
     where_conditions = []
     
     if start_date and end_date:
@@ -84,6 +212,7 @@ def get_funnel_data(start_date=None, end_date=None, user_id=None):
     if where_clause:
         where_clause = f"WHERE {where_clause}"
     
+    # 优化的SQL查询 - 只查询需要的字段
     sql = f"""
     SELECT 
         event_type,
@@ -125,8 +254,9 @@ def get_funnel_data(start_date=None, end_date=None, user_id=None):
     
     return pd.DataFrame(funnel_data).sort_values('order')
 
+@cache_result(timeout=300)  # 5分钟缓存
 def get_trend_data(start_date=None, end_date=None, user_id=None):
-    """获取趋势数据"""
+    """获取趋势数据（缓存优化）"""
     where_conditions = []
     
     if start_date and end_date:
@@ -139,16 +269,17 @@ def get_trend_data(start_date=None, end_date=None, user_id=None):
     if where_clause:
         where_clause = f"WHERE {where_clause}"
     
+    # 优化的SQL查询 - 添加索引提示
     sql = f"""
     SELECT 
         DATE(create_time) as date,
         event_type,
         COUNT(*) as count
-    FROM recruit_event 
+    FROM recruit_event USE INDEX (idx_create_time, idx_event_type)
     {where_clause}
     GROUP BY DATE(create_time), event_type
     ORDER BY date DESC
-    LIMIT 100
+    LIMIT 30
     """
     
     df = query_data(sql)
@@ -164,36 +295,6 @@ def get_trend_data(start_date=None, end_date=None, user_id=None):
         df['event_type'] = df['event_type'].map(event_type_mapping).fillna(df['event_type'])
     
     return df
-
-def get_user_list():
-    """获取用户列表"""
-    sql = """
-    SELECT 
-        u.id,
-        CASE 
-            WHEN u.name IS NOT NULL AND u.name != '' THEN u.name
-            ELSE CONCAT('用户-', LEFT(u.id, 8))
-        END as display_name,
-        COUNT(re.id) as event_count
-    FROM user u
-    LEFT JOIN recruit_event re ON u.id = re.uid
-    GROUP BY u.id, u.name
-    HAVING event_count > 0
-    ORDER BY event_count DESC
-    """
-    df = query_data(sql)
-    
-    options = [{'label': '全部用户', 'value': 'all'}]
-    
-    if not df.empty:
-        for _, row in df.iterrows():
-            # 显示用户名和事件数量
-            options.append({
-                'label': f"{row['display_name']} ({row['event_count']}条)",
-                'value': str(row['id'])
-            })
-    
-    return options
 
 def get_key_metrics(start_date=None, end_date=None, user_id=None):
     """获取关键指标"""
@@ -233,6 +334,13 @@ def get_key_metrics(start_date=None, end_date=None, user_id=None):
         'mutual_communication_rate': mutual_communication_rate,   # 相互沟通率
         'resume_screening_rate': resume_screening_rate            # 简历过筛率
     }
+
+def create_loading_component():
+    """创建加载组件"""
+    return html.Div([
+        html.Div(className="loading-spinner"),
+        html.Span("数据加载中...", style={'marginLeft': '10px', 'color': colors['text']})
+    ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center', 'padding': '20px'})
 
 def create_metric_card(title, value, change=None, format_type='number', icon=None, calculation_formula=None):
     """创建指标卡片，包含计算方式说明"""
@@ -418,7 +526,7 @@ def create_trend_chart(trend_df):
     return fig
 
 def get_detailed_data(start_date=None, end_date=None, user_id=None, limit=None):
-    """获取详细数据"""
+    """获取详细数据（使用真实姓名）"""
     where_conditions = []
     
     if start_date and end_date:
@@ -438,11 +546,9 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None, limit=None):
     SELECT 
         re.id,
         re.event_type as '事件类型',
-        CASE 
-            WHEN u.name IS NOT NULL AND u.name != '' THEN u.name
-            WHEN re.uid IS NOT NULL THEN CONCAT('用户-', LEFT(re.uid, 8))
-            ELSE '未知用户'
-        END as '用户',
+        u.name as user_name,
+        u.provider_id,
+        re.uid,
         re.resume_id as '简历ID',
         re.job_id as '职位ID', 
         DATE_FORMAT(re.create_time, '%Y-%m-%d %H:%i:%s') as '创建时间'
@@ -455,8 +561,8 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None, limit=None):
     
     df = query_data(sql)
     
-    # 添加事件类型映射 - 根据Prisma schema修正
     if not df.empty:
+        # 添加事件类型映射
         event_type_mapping = {
             '1': '浏览简历',        # VIEW_RESUME
             '2': '打招呼',         # SCREEN_PASS
@@ -464,6 +570,22 @@ def get_detailed_data(start_date=None, end_date=None, user_id=None, limit=None):
             '13': '建联量'          # PHONE_NUMBER
         }
         df['事件类型'] = df['事件类型'].map(event_type_mapping).fillna(df['事件类型'])
+        
+        # 使用真实姓名映射
+        def get_display_name(row):
+            if row['provider_id'] and str(row['provider_id']) in USER_NAME_MAPPING:
+                return USER_NAME_MAPPING[str(row['provider_id'])]
+            elif row['user_name']:
+                return row['user_name']
+            elif row['uid']:
+                return f'用户-{str(row["uid"])[:8]}'
+            else:
+                return '未知用户'
+        
+        df['用户'] = df.apply(get_display_name, axis=1)
+        
+        # 只保留需要显示的列
+        df = df[['事件类型', '用户', '简历ID', '职位ID', '创建时间']]
     
     return df
 
@@ -899,6 +1021,39 @@ def create_mutual_communication_trend_chart(trend_df):
     
     return fig
 
+@cache_result(timeout=300)  # 5分钟缓存
+def query_data(sql):
+    """执行SQL查询并返回DataFrame（带缓存优化）"""
+    connection = get_db_connection()
+    if connection:
+        try:
+            df = pd.read_sql(sql, connection)
+            return df
+        except Exception as e:
+            print(f"查询执行失败: {e}")
+            return pd.DataFrame()
+        finally:
+            connection_pool.return_connection(connection)
+    return pd.DataFrame()
+
+# 创建Dash应用
+app = dash.Dash(__name__, external_stylesheets=['assets/style.css'])
+app.title = "智能招聘数据分析平台"
+
+# 初始化缓存
+cache = Cache(app.server, config={'CACHE_TYPE': 'simple'})
+
+# 定义颜色主题
+colors = {
+    'primary': '#06D6A0',
+    'secondary': '#118AB2',
+    'success': '#06D6A0',
+    'warning': '#FFD166',
+    'danger': '#EF476F',
+    'background': '#0A0E1A',
+    'text': '#FFFFFF'
+}
+
 # 应用布局
 app.layout = html.Div([
     # 隐藏的存储组件用于状态管理
@@ -1031,6 +1186,13 @@ app.layout = html.Div([
                 ], className="card")
             ], style={'gridColumn': '2'})
         ], className="content-grid", style={'marginBottom': '2.5rem'}),
+        
+        # 用户活动汇总分析
+        html.Div([
+            html.Div([
+                create_user_activity_summary()
+            ], className="card")
+        ], style={'marginBottom': '2.5rem'}),
         
         # 详细数据表格
         html.Div([
@@ -1596,6 +1758,174 @@ def export_csv(n_clicks, start_date, end_date, user_id):
             print(f"导出CSV失败: {e}")
     
     return dash.no_update
+
+# 用户数据处理功能
+def process_user_mapping_data(user_data_text=None):
+    """处理用户姓名和provider_id的映射数据"""
+    if not user_data_text:
+        return pd.DataFrame()
+    
+    try:
+        # 解析用户提供的数据
+        lines = user_data_text.strip().split('\n')
+        user_mappings = []
+        
+        for line in lines:
+            if '\t' in line or '  ' in line:  # 检查是否有分隔符
+                parts = line.split('\t') if '\t' in line else line.split('  ')
+                if len(parts) >= 2:
+                    name = parts[0].strip()
+                    provider_id = parts[1].strip()
+                    if name and provider_id:
+                        user_mappings.append({
+                            'name': name,
+                            'provider_id': provider_id
+                        })
+        
+        return pd.DataFrame(user_mappings)
+    except Exception as e:
+        print(f"处理用户映射数据失败: {e}")
+        return pd.DataFrame()
+
+@cache_result(timeout=300)
+def get_enhanced_user_list():
+    """获取增强的用户列表（包含真实姓名映射）"""
+    sql = """
+    SELECT 
+        u.id,
+        u.name,
+        COUNT(re.id) as event_count,
+        MAX(re.create_time) as last_activity
+    FROM user u
+    LEFT JOIN recruit_event re ON u.id = re.uid
+    GROUP BY u.id, u.name
+    HAVING event_count > 0
+    ORDER BY event_count DESC, last_activity DESC
+    LIMIT 100
+    """
+    df = query_data(sql)
+    
+    options = [{'label': '全部用户', 'value': 'all'}]
+    
+    if not df.empty:
+        for _, row in df.iterrows():
+            user_id = str(row['id'])
+            user_name = row['name'] if row['name'] else f'用户-{user_id[:8]}'
+            event_count = row['event_count']
+            
+            # 显示更丰富的用户信息
+            label = f"{user_name} ({event_count}条活动)"
+            if row['last_activity']:
+                last_date = row['last_activity'].strftime('%m-%d') if hasattr(row['last_activity'], 'strftime') else str(row['last_activity'])[:10]
+                label += f" [最近: {last_date}]"
+            
+            options.append({
+                'label': label,
+                'value': user_id
+            })
+    
+    return options
+
+def create_user_activity_summary():
+    """创建用户活动汇总分析（使用真实姓名）"""
+    sql = """
+    SELECT 
+        u.id,
+        u.name as user_name,
+        u.provider_id,
+        re.event_type,
+        COUNT(*) as activity_count,
+        DATE(MIN(re.create_time)) as first_activity,
+        DATE(MAX(re.create_time)) as last_activity,
+        DATEDIFF(MAX(re.create_time), MIN(re.create_time)) + 1 as active_days
+    FROM user u
+    LEFT JOIN recruit_event re ON u.id = re.uid
+    WHERE re.id IS NOT NULL
+    GROUP BY u.id, u.name, u.provider_id, re.event_type
+    ORDER BY activity_count DESC
+    """
+    
+    df = query_data(sql)
+    
+    if df.empty:
+        return html.Div("暂无用户活动数据", style={'color': colors['text'], 'textAlign': 'center', 'padding': '2rem'})
+    
+    # 使用真实姓名映射
+    def get_real_name(row):
+        if row['provider_id'] and str(row['provider_id']) in USER_NAME_MAPPING:
+            return USER_NAME_MAPPING[str(row['provider_id'])]
+        elif row['user_name']:
+            return row['user_name']
+        else:
+            return f'用户-{str(row["id"])[:8]}'
+    
+    df['真实姓名'] = df.apply(get_real_name, axis=1)
+    
+    # 事件类型映射
+    event_mapping = {
+        '1': '浏览简历',
+        '2': '打招呼', 
+        '12': '相互沟通',
+        '13': '建联量'
+    }
+    
+    df['活动类型'] = df['event_type'].map(event_mapping).fillna(df['event_type'])
+    
+    # 创建用户活动汇总表
+    summary_table = dash_table.DataTable(
+        data=df[['真实姓名', '活动类型', 'activity_count', 'first_activity', 'last_activity', 'active_days']].to_dict('records'),
+        columns=[
+            {"name": "👤 真实姓名", "id": "真实姓名"},
+            {"name": "📋 活动类型", "id": "活动类型"},
+            {"name": "📊 活动次数", "id": "activity_count", "type": "numeric"},
+            {"name": "🗓️ 首次活动", "id": "first_activity"},
+            {"name": "📅 最近活动", "id": "last_activity"},
+            {"name": "⏱️ 活跃天数", "id": "active_days", "type": "numeric"}
+        ],
+        page_size=20,
+        sort_action="native",
+        filter_action="native",
+        style_table={'overflowX': 'auto'},
+        style_cell={
+            'textAlign': 'left',
+            'padding': '12px',
+            'fontFamily': 'Arial',
+            'fontSize': '14px',
+            'backgroundColor': 'rgba(10, 14, 26, 0.8)',
+            'color': colors['text'],
+            'border': '1px solid rgba(255,255,255,0.1)'
+        },
+        style_header={
+            'fontWeight': 'bold',
+            'textAlign': 'center',
+            'backgroundColor': colors['primary'],
+            'color': 'white',
+            'fontSize': '15px'
+        },
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgba(30, 39, 73, 0.4)'
+            },
+            {
+                'if': {'filter_query': '{activity_count} > 100'},
+                'backgroundColor': 'rgba(6, 214, 160, 0.15)',
+                'color': colors['success'],
+                'fontWeight': 'bold'
+            },
+            {
+                'if': {'filter_query': '{activity_count} > 50 && {activity_count} <= 100'},
+                'backgroundColor': 'rgba(255, 209, 102, 0.15)',
+                'color': colors['warning']
+            }
+        ]
+    )
+    
+    return html.Div([
+        html.H3("👥 用户活动汇总分析", style={'color': colors['text'], 'marginBottom': '1rem'}),
+        html.P("展示各用户的真实姓名和活动统计", style={'color': colors['text'], 'fontSize': '14px', 'marginBottom': '1rem'}),
+        summary_table
+    ], style={'marginTop': '2rem'})
 
 if __name__ == '__main__':
     print("🚀 启动智能招聘数据分析平台...")
