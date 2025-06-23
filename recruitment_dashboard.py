@@ -1190,7 +1190,10 @@ app.layout = html.Div([
         # 用户活动汇总分析
         html.Div([
             html.Div([
-                create_user_activity_summary()
+                html.H3("👥 用户活动汇总分析", style={'color': colors['text'], 'marginBottom': '1rem'}),
+                html.P("展示各用户的真实姓名和活动统计", style={'color': colors['text'], 'fontSize': '14px', 'marginBottom': '1rem'}),
+                html.Div(id="user-activity-loading", children=create_loading_component()),
+                html.Div(id="user-activity-summary", style={'display': 'none'})
             ], className="card")
         ], style={'marginBottom': '2.5rem'}),
         
@@ -1255,6 +1258,9 @@ def update_auto_refresh(interval_value):
      Output('mutual-comm-trend-chart', 'figure'),
      Output('mutual-comm-trend-chart', 'style'),
      Output('mutual-comm-trend-loading', 'style'),
+     Output('user-activity-summary', 'children'),
+     Output('user-activity-summary', 'style'),
+     Output('user-activity-loading', 'style'),
      Output('data-table-container', 'children'),
      Output('data-table-container', 'style'),
      Output('data-table-loading', 'style'),
@@ -1304,6 +1310,9 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
         comm_success_trend_chart = create_communication_success_trend_chart(comm_success_trend_df)
         mutual_comm_trend_chart = create_mutual_communication_trend_chart(mutual_comm_trend_df)
         
+        # 创建用户活动汇总
+        user_activity_summary = create_user_activity_summary_table()
+        
         # 创建数据表格
         if not detailed_df.empty:
             # 移除ID列用于显示
@@ -1351,6 +1360,7 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
             success_trend_chart, {'display': 'block'}, hidden_style,
             comm_success_trend_chart, {'display': 'block'}, hidden_style,
             mutual_comm_trend_chart, {'display': 'block'}, hidden_style,
+            user_activity_summary, {'display': 'block'}, hidden_style,
             data_table, {'display': 'block'}, hidden_style,
             update_time,
             time.time()
@@ -1371,6 +1381,7 @@ def update_dashboard(start_date, end_date, user_id, refresh_clicks, auto_refresh
             {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
             {}, hidden_style, hidden_style,
+            error_msg, hidden_style, hidden_style,
             error_msg, hidden_style, hidden_style,
             f"更新失败: {datetime.now().strftime('%H:%M:%S')}",
             time.time()
@@ -1826,8 +1837,8 @@ def get_enhanced_user_list():
     
     return options
 
-def create_user_activity_summary():
-    """创建用户活动汇总分析（使用真实姓名）"""
+def create_user_activity_summary_table():
+    """创建用户活动汇总分析表格（使用真实姓名）"""
     sql = """
     SELECT 
         u.id,
@@ -1921,11 +1932,7 @@ def create_user_activity_summary():
         ]
     )
     
-    return html.Div([
-        html.H3("👥 用户活动汇总分析", style={'color': colors['text'], 'marginBottom': '1rem'}),
-        html.P("展示各用户的真实姓名和活动统计", style={'color': colors['text'], 'fontSize': '14px', 'marginBottom': '1rem'}),
-        summary_table
-    ], style={'marginTop': '2rem'})
+    return summary_table
 
 if __name__ == '__main__':
     print("🚀 启动智能招聘数据分析平台...")
